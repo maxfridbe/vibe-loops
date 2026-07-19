@@ -1,0 +1,17 @@
+file	name	category	bpm	beats	key	license	source
+loop_amen.mp3	Amen Break	drums	136.88	4		CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+loop_breakbeat.mp3	Breakbeat	drums	126.00	4		CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+loop_compus.mp3	Compus	drums	148.00	16		CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+loop_industrial.mp3	Industrial	drums	135.79	2		CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+loop_mika.mp3	Mika	drums	120.00	16		CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+loop_safari.mp3	Safari	drums	119.92	16		CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+loop_tabla.mp3	Tabla	drums	89.94	16		CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+loop_perc1.mp3	Perc One	perc	97.00	4		CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+loop_perc2.mp3	Perc Two	perc	97.00	4		CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+loop_electric.mp3	Electric	melodic	97.00	4		CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+loop_garzul.mp3	Garzul	melodic	120.00	16		CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+loop_weirdo.mp3	Weirdo	fx	97.00	8		CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+synth_bass.mp3	Pulse Bass	bass	120	8	Am	CC0	synthesized
+synth_arp.mp3	Cascade Arp	melodic	128	8	Am	CC0	synthesized
+synth_pad.mp3	Drift Pad	pads	90	8	Am	CC0	synthesized
+synth_hats.mp3	Tick Hats	perc	140	8		CC0	synthesized

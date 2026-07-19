@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "amd",
+    "outFile": "dist/vibe-loops.js",
+    "rootDir": "src",
+    "jsx": "react",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noFallthroughCasesInSwitch": true,
+    "ignoreDeprecations": "6.0",
+    "allowUmdGlobalAccess": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "react": ["typings/react/index.d.ts"],
+      "react-dom": ["typings/react-dom/index.d.ts"],
+      "react-dom/client": ["typings/react-dom/client.d.ts"],
+      "csstype": ["typings/csstype/index.d.ts"],
+      "prop-types": ["typings/prop-types/index.d.ts"]
+    }
+  },
+  "include": ["src/**/*", "typings/globals.d.ts"]
+}
