@@ -35,6 +35,12 @@ export interface Clip {
   offsetTicks: number; // slip offset into the loop
   gain: number;
   muted: boolean;
+  // Optional non-destructive volume envelope over the clip (FL-style):
+  // pos 0..1 across the clip, value 0..1 gain multiplier. Absent = flat.
+  envelope?: AutoPoint[];
+  // Timeline ticks one loop repetition occupies in this clip. Absent = the
+  // loop's natural length; other values time-stretch the audio in place.
+  stretchTicks?: number;
 }
 
 export type AutoTarget = 'master.volume' | 'track.volume' | 'track.pan';
@@ -68,7 +74,15 @@ export interface Project extends Arrangement {
   loops: Loop[];
 }
 
-export type Tool = 'draw' | 'paint' | 'slice' | 'mute' | 'select';
+export type Tool = 'draw' | 'paint' | 'slice' | 'mute' | 'select' | 'stretch';
+
+// Ticks one repetition of the clip's loop occupies (stretch-aware).
+export const clipPeriodTicks = (clip: { stretchTicks?: number }, loop: Loop): number =>
+  clip.stretchTicks ?? loopLengthTicks(loop);
+
+// Stretch ratio relative to the loop's natural musical length.
+export const clipStretchRatio = (clip: { stretchTicks?: number }, loop: Loop): number =>
+  clipPeriodTicks(clip, loop) / loopLengthTicks(loop);
 
 export type ClipKind = 'loop' | 'automation';
 

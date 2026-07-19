@@ -14,6 +14,7 @@ export interface UIState {
   autoSelection: number[];   // selected automation-clip ids
   playing: boolean;
   theme: string;             // id from THEMES
+  envelopeMode: boolean;     // per-clip volume envelope editing overlay
 }
 
 interface HistoryEntry {
@@ -58,7 +59,9 @@ export type Action =
   | { type: 'redo' }
   | { type: 'set-status'; status: string }
   | { type: 'set-theme'; theme: string }
-  | { type: 'add-loop'; loop: Loop };
+  | { type: 'add-loop'; loop: Loop }
+  | { type: 'rename-loop'; loopId: number; name: string }
+  | { type: 'toggle-envelope-mode' };
 
 const snapshot = (p: Project): HistoryEntry => ({
   bpm: p.bpm,
@@ -86,6 +89,7 @@ export const initialUI: UIState = {
   autoSelection: [],
   playing: false,
   theme: DEFAULT_THEME,
+  envelopeMode: false,
 };
 
 export const makeInitialState = (project: Project, theme?: string): AppState => ({
@@ -199,6 +203,16 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, status: action.status };
     case 'set-theme':
       return { ...state, ui: { ...state.ui, theme: action.theme } };
+    case 'rename-loop':
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          loops: state.project.loops.map(l => (l.id === action.loopId ? { ...l, name: action.name } : l)),
+        },
+      };
+    case 'toggle-envelope-mode':
+      return { ...state, ui: { ...state.ui, envelopeMode: !state.ui.envelopeMode } };
     case 'add-loop':
       return {
         ...state,

@@ -39,3 +39,5 @@ export const SpeakerIcon = make('');    // nf-fa-volume_up
 export const LoopIcon = make('');       // nf-fa-refresh
 export const MicIcon = make('');       // nf-fa-microphone
 export const UploadIcon = make('');    // nf-fa-upload
+export const EnvelopeIcon = make('');  // nf-fa-sliders
+export const StretchIcon = make('');   // nf-fa-arrows_h

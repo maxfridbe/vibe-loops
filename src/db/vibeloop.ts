@@ -32,7 +32,8 @@ CREATE TABLE clips (
   id INTEGER PRIMARY KEY, track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
   loop_id INTEGER NOT NULL REFERENCES loops(id), start_ticks INTEGER NOT NULL,
   length_ticks INTEGER NOT NULL, offset_ticks INTEGER NOT NULL DEFAULT 0,
-  gain REAL NOT NULL DEFAULT 1.0, muted INTEGER NOT NULL DEFAULT 0
+  gain REAL NOT NULL DEFAULT 1.0, muted INTEGER NOT NULL DEFAULT 0,
+  stretch_ticks INTEGER
 );
 CREATE TABLE automation_clips (
   id INTEGER PRIMARY KEY, track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
@@ -41,6 +42,11 @@ CREATE TABLE automation_clips (
 );
 CREATE TABLE automation_points (
   clip_id INTEGER NOT NULL REFERENCES automation_clips(id) ON DELETE CASCADE,
+  idx INTEGER NOT NULL, pos REAL NOT NULL, value REAL NOT NULL,
+  tension REAL NOT NULL DEFAULT 0, PRIMARY KEY (clip_id, idx)
+);
+CREATE TABLE clip_envelope_points (
+  clip_id INTEGER NOT NULL REFERENCES clips(id) ON DELETE CASCADE,
   idx INTEGER NOT NULL, pos REAL NOT NULL, value REAL NOT NULL,
   tension REAL NOT NULL DEFAULT 0, PRIMARY KEY (clip_id, idx)
 );
@@ -90,6 +96,23 @@ export async function parseVibeloop(bytes: Uint8Array): Promise<Project> {
       muted: Boolean(Number(r.muted)),
     }));
 
+    // per-clip envelopes: table absent in v1 files, so probe first
+    const hasEnvTable = rows(db,
+      "SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name='clip_envelope_points'",
+    )[0]?.n;
+    const envByClip = new Map<number, AutoPoint[]>();
+    if (Number(hasEnvTable) > 0) {
+      for (const r of rows(db, 'SELECT * FROM clip_envelope_points ORDER BY clip_id, idx')) {
+        const cid = Number(r.clip_id);
+        if (!envByClip.has(cid)) envByClip.set(cid, []);
+        envByClip.get(cid)!.push({
+          pos: Number(r.pos),
+          value: Number(r.value),
+          tension: Number(r.tension),
+        });
+      }
+    }
+
     const clips: Clip[] = rows(db, 'SELECT * FROM clips ORDER BY id').map(r => ({
       id: Number(r.id),
       trackId: Number(r.track_id),
@@ -99,6 +122,8 @@ export async function parseVibeloop(bytes: Uint8Array): Promise<Project> {
       offsetTicks: Number(r.offset_ticks),
       gain: Number(r.gain),
       muted: Boolean(Number(r.muted)),
+      envelope: envByClip.get(Number(r.id)),
+      stretchTicks: r.stretch_ticks == null ? undefined : Number(r.stretch_ticks),
     }));
 
     const pointsByClip = new Map<number, AutoPoint[]>();
@@ -146,7 +171,7 @@ export async function serializeProject(p: Project): Promise<Uint8Array> {
     const meta = db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)');
     const metaRows: Array<[string, string]> = [
       ['format', 'vibeloop'],
-      ['version', '1'],
+      ['version', '2'], // v2 adds clip_envelope_points; v1 files remain readable
       ['name', p.name],
       ['bpm', String(p.bpm)],
       ['ppq', '96'],
@@ -172,12 +197,17 @@ export async function serializeProject(p: Project): Promise<Uint8Array> {
     trackStmt.free();
 
     const clipStmt = db.prepare(
-      'INSERT INTO clips (id, track_id, loop_id, start_ticks, length_ticks, offset_ticks, gain, muted) VALUES (?,?,?,?,?,?,?,?)',
+      'INSERT INTO clips (id, track_id, loop_id, start_ticks, length_ticks, offset_ticks, gain, muted, stretch_ticks) VALUES (?,?,?,?,?,?,?,?,?)',
+    );
+    const envStmt = db.prepare(
+      'INSERT INTO clip_envelope_points (clip_id, idx, pos, value, tension) VALUES (?,?,?,?,?)',
     );
     for (const c of p.clips) {
-      clipStmt.run([c.id, c.trackId, c.loopId, c.startTicks, c.lengthTicks, c.offsetTicks, c.gain, c.muted ? 1 : 0]);
+      clipStmt.run([c.id, c.trackId, c.loopId, c.startTicks, c.lengthTicks, c.offsetTicks, c.gain, c.muted ? 1 : 0, c.stretchTicks ?? null]);
+      c.envelope?.forEach((pt, i) => envStmt.run([c.id, i, pt.pos, pt.value, pt.tension]));
     }
     clipStmt.free();
+    envStmt.free();
 
     const autoStmt = db.prepare(
       'INSERT INTO automation_clips (id, track_id, target, start_ticks, length_ticks, muted) VALUES (?,?,?,?,?,?)',

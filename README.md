@@ -50,6 +50,9 @@ All implemented functionality is tracked with requirement IDs in
 | Split clip | Slice tool (C), click |
 | Toggle clip mute | Mute tool (T), click |
 | Marquee select | Select tool (E), drag; Del deletes |
+| Time-stretch in place | Stretch tool (S), drag clip start/end (0.25×–4×) |
+| Clip volume envelope | envelope mode (ribbon toggle): click adds a point, drag points/tension handles, right-click removes |
+| Rename a library loop | double-click its browser row |
 | Delete clip | right-click |
 | Bypass snap | hold Alt |
 | Add automation point | Ctrl-click the curve |
@@ -75,9 +78,9 @@ build and run:
   the hashes in the HTML always match the shipped files.
 - **`typings/`** — dev-only `.d.ts` files (React types etc.), fetched once
   from npm tarballs and committed. Never shipped.
-- **`assets/loops/`** + **`assets/loops.tsv`** — the starter collection:
-  12 CC0 loops from the Sonic Pi sample library (flac→mp3 via ffmpeg) and
-  4 loops synthesized from scratch by ffmpeg expression filters
+- **`assets/loops/`** + **`assets/loops.tsv`** — the starter collection of
+  36 loops: 17 CC0 loops from the Sonic Pi sample library (flac→mp3 via
+  ffmpeg) and 19 loops synthesized from scratch by ffmpeg expression filters
   (`scripts/make-loops.sh`). All under 20 seconds.
 - **`scripts/build-library.sh`** — packs the loops + metadata into
   `dist/library.vibeloop` using only the `sqlite3` CLI (`readfile()`).
@@ -107,11 +110,13 @@ publishes `dist/` to GitHub Pages (set the repository's Pages source to
 
 ### `.vibeloop` format
 
-A `.vibeloop` file is a SQLite database (schema v1, see
+A `.vibeloop` file is a SQLite database (schema v2, see
 `scripts/schema.sql`): `meta` (name, bpm, ppq…), `loops` (metadata + mp3
-BLOB), `tracks`, `clips` (tick-based, 96 PPQ), `automation_clips` +
-`automation_points` (normalized positions, values, tension). The shipped
-starter library is the same format with an empty arrangement.
+BLOB), `tracks`, `clips` (tick-based, 96 PPQ, optional per-clip
+`stretch_ticks`), `clip_envelope_points` (per-clip volume envelopes),
+`automation_clips` + `automation_points` (normalized positions, values,
+tension). v1 files (no envelope table / stretch column) load cleanly. The
+shipped starter library is the same format with an empty arrangement.
 
 ## Licenses
 

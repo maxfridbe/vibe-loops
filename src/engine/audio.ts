@@ -1,12 +1,17 @@
 import {
-  Loop, Project, loopLengthTicks, secondsToTicks, ticksToSeconds,
+  Loop, Project, clipStretchRatio, clipPeriodTicks, secondsToTicks, ticksToSeconds,
 } from '../types';
-import { sampleAutoCurve } from './automation';
+import { sampleAutoCurve, samplePointCurve } from './automation';
 import { stretchChannels } from './stretch';
 
-// A loop stretched to match a given project tempo. The stretched buffer's
-// musical length is loop.beats quarter-notes at the project BPM.
-const stretchKey = (loopId: number, bpm: number): string => `${loopId}@${bpm.toFixed(2)}`;
+// A loop stretched to match a given project tempo and per-clip stretch
+// ratio. The stretched buffer's musical length is loop.beats * ratio
+// quarter-notes at the project BPM.
+const stretchKey = (loopId: number, bpm: number, ratio: number): string =>
+  `${loopId}@${bpm.toFixed(2)}x${ratio.toFixed(4)}`;
+
+export const bufferKey = (loopId: number, ratio: number): string =>
+  `${loopId}x${ratio.toFixed(4)}`;
 
 export class AudioEngine {
   private ctx: AudioContext | null = null;
@@ -66,15 +71,15 @@ export class AudioEngine {
     return null;
   }
 
-  // Returns the loop's audio stretched so its `beats` span `beats` project
-  // quarter-notes at `bpm`. Requires the loop to be decoded already.
-  private stretched(loop: Loop, decoded: AudioBuffer, bpm: number): AudioBuffer {
-    const key = stretchKey(loop.id, bpm);
+  // Returns the loop's audio stretched so its `beats` span `beats * ratio`
+  // project quarter-notes at `bpm`. Requires the loop to be decoded already.
+  private stretched(loop: Loop, decoded: AudioBuffer, bpm: number, ratio: number): AudioBuffer {
+    const key = stretchKey(loop.id, bpm, ratio);
     const hit = this.stretchCache.get(key);
     if (hit) return hit;
 
     const nativeDur = decoded.duration;
-    const targetDur = (loop.beats * 60) / bpm;
+    const targetDur = ((loop.beats * 60) / bpm) * ratio;
     const tempo = nativeDur / targetDur; // >1 = speed up
     const channels: Float32Array[] = [];
     for (let c = 0; c < decoded.numberOfChannels; c++) channels.push(decoded.getChannelData(c));
@@ -89,15 +94,18 @@ export class AudioEngine {
     return buf;
   }
 
-  async prepareBuffers(project: Project): Promise<Map<number, AudioBuffer>> {
-    const usedLoopIds = new Set(project.clips.map(c => c.loopId));
+  // One buffer per distinct (loop, stretch-ratio) pair used by the clips.
+  async prepareBuffers(project: Project): Promise<Map<string, AudioBuffer>> {
     const byId = new Map(project.loops.map(l => [l.id, l]));
-    const result = new Map<number, AudioBuffer>();
-    for (const id of usedLoopIds) {
-      const loop = byId.get(id);
+    const result = new Map<string, AudioBuffer>();
+    for (const clip of project.clips) {
+      const loop = byId.get(clip.loopId);
       if (!loop) continue;
+      const ratio = clipStretchRatio(clip, loop);
+      const key = bufferKey(loop.id, ratio);
+      if (result.has(key)) continue;
       const decoded = await this.ensureDecoded(loop);
-      result.set(id, this.stretched(loop, decoded, project.bpm));
+      result.set(key, this.stretched(loop, decoded, project.bpm, ratio));
     }
     return result;
   }
@@ -191,6 +199,8 @@ export interface ScheduleResult {
   endSeconds: number; // seconds from t0 until the arrangement ends
 }
 
+type BufferMap = Map<string, AudioBuffer>;
+
 // Builds the mixing graph and schedules every clip and automation curve at
 // absolute context time t0 (which corresponds to playlist position
 // fromTicks). Shared by realtime playback and offline rendering.
@@ -200,7 +210,7 @@ export function scheduleArrangement(
   project: Project,
   fromTicks: number,
   t0: number,
-  buffers: Map<number, AudioBuffer>,
+  buffers: BufferMap,
 ): ScheduleResult {
   const bpm = project.bpm;
   const toSec = (ticks: number): number => ticksToSeconds(ticks, bpm);
@@ -235,7 +245,7 @@ export function scheduleArrangement(
     if (clip.muted) continue;
     const tn = trackNodes.get(clip.trackId);
     const loop = loopById.get(clip.loopId);
-    const buffer = buffers.get(clip.loopId);
+    const buffer = loop ? buffers.get(bufferKey(loop.id, clipStretchRatio(clip, loop))) : undefined;
     if (!tn || !loop || !buffer) continue;
 
     const clipGain = ctx.createGain();
@@ -243,10 +253,26 @@ export function scheduleArrangement(
     clipGain.connect(tn.input);
     nodes.push(clipGain);
 
-    const loopTicks = loopLengthTicks(loop);
+    const loopTicks = clipPeriodTicks(clip, loop); // stretch-aware tile period
     const clipEnd = clip.startTicks + clip.lengthTicks;
     const windowStart = Math.max(clip.startTicks, fromTicks);
     if (clipEnd <= windowStart) continue;
+
+    // FL-style per-clip volume envelope: a gain curve over the clip length,
+    // scaled by the clip's static gain, applied before the track chain.
+    if (clip.envelope && clip.envelope.length >= 2) {
+      const posStart = (windowStart - clip.startTicks) / clip.lengthTicks;
+      const full = samplePointCurve(clip.envelope, 256);
+      const startIdx = Math.floor(posStart * (full.length - 1));
+      const curve = full.subarray(startIdx).slice();
+      const dur = toSec(clipEnd - windowStart);
+      if (curve.length >= 2 && dur > 0) {
+        for (let i = 0; i < curve.length; i++) curve[i] *= clip.gain;
+        try {
+          clipGain.gain.setValueCurveAtTime(curve, t0 + toSec(windowStart - fromTicks), dur);
+        } catch { /* invalid scheduling range; keep static gain */ }
+      }
+    }
 
     // audio tiles have period loopTicks, phase-anchored at start - offset
     const anchor = clip.startTicks - clip.offsetTicks;

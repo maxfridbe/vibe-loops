@@ -39,6 +39,7 @@ export const App = (): React.ReactElement => {
   const [uiScale, setUiScale] = React.useState(loadUiScale);
   const [auditioningLoopId, setAuditioningLoopId] = React.useState<number | null>(null);
   const [importState, setImportState] = React.useState<ImportState | null>(null);
+  const [renamingLoop, setRenamingLoop] = React.useState<{ loop: Loop; name: string } | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const importInputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -138,7 +139,7 @@ export const App = (): React.ReactElement => {
           dispatch({ type: 'set-selection', clipIds: [], autoClipIds: [] });
         }
       } else if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-        const tool = ({ p: 'draw', b: 'paint', c: 'slice', t: 'mute', e: 'select' } as const)[e.key.toLowerCase()];
+        const tool = ({ p: 'draw', b: 'paint', c: 'slice', t: 'mute', e: 'select', s: 'stretch' } as const)[e.key.toLowerCase()];
         if (tool) dispatch({ type: 'set-tool', tool });
       }
     };
@@ -299,6 +300,7 @@ export const App = (): React.ReactElement => {
           onFocusLoop={id => dispatch({ type: 'focus-loop', loopId: id })}
           onToggleAudition={onToggleAudition}
           onBeginDrag={(loopId, x, y) => setDragLoop({ loopId, x, y })}
+          onRequestRename={loop => setRenamingLoop({ loop, name: loop.name })}
         />
         <Playlist
           state={state}
@@ -313,6 +315,38 @@ export const App = (): React.ReactElement => {
       {dragLoop && (
         <div className="drag-ghost" style={{ left: `calc(${dragLoop.x}px + 0.5rem)`, top: `calc(${dragLoop.y}px + 0.5rem)` }}>
           {state.project.loops.find(l => l.id === dragLoop.loopId)?.name}
+        </div>
+      )}
+      {renamingLoop && (
+        <div className="vl-modal-backdrop" onMouseDown={() => setRenamingLoop(null)}>
+          <div className="vl-modal" onMouseDown={e => e.stopPropagation()}>
+            <div className="vl-modal-title">Rename loop</div>
+            <input
+              className="vl-modal-input"
+              autoFocus
+              value={renamingLoop.name}
+              onChange={e => setRenamingLoop({ ...renamingLoop, name: e.target.value })}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && renamingLoop.name.trim()) {
+                  dispatch({ type: 'rename-loop', loopId: renamingLoop.loop.id, name: renamingLoop.name.trim() });
+                  setRenamingLoop(null);
+                } else if (e.key === 'Escape') {
+                  setRenamingLoop(null);
+                }
+              }}
+            />
+            <div className="vl-modal-buttons">
+              <button onClick={() => setRenamingLoop(null)}>cancel</button>
+              <button
+                className="primary"
+                disabled={!renamingLoop.name.trim()}
+                onClick={() => {
+                  dispatch({ type: 'rename-loop', loopId: renamingLoop.loop.id, name: renamingLoop.name.trim() });
+                  setRenamingLoop(null);
+                }}
+              >rename</button>
+            </div>
+          </div>
         </div>
       )}
       {importState?.kind === 'record' && (

@@ -34,14 +34,15 @@ CREATE TABLE tracks (
 );
 
 CREATE TABLE clips (
-  id           INTEGER PRIMARY KEY,
-  track_id     INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-  loop_id      INTEGER NOT NULL REFERENCES loops(id),
-  start_ticks  INTEGER NOT NULL,
-  length_ticks INTEGER NOT NULL,
-  offset_ticks INTEGER NOT NULL DEFAULT 0,
-  gain         REAL NOT NULL DEFAULT 1.0,
-  muted        INTEGER NOT NULL DEFAULT 0
+  id            INTEGER PRIMARY KEY,
+  track_id      INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+  loop_id       INTEGER NOT NULL REFERENCES loops(id),
+  start_ticks   INTEGER NOT NULL,
+  length_ticks  INTEGER NOT NULL,
+  offset_ticks  INTEGER NOT NULL DEFAULT 0,
+  gain          REAL NOT NULL DEFAULT 1.0,
+  muted         INTEGER NOT NULL DEFAULT 0,
+  stretch_ticks INTEGER -- NULL = loop's natural length (no stretch)
 );
 
 CREATE TABLE automation_clips (
@@ -58,6 +59,16 @@ CREATE TABLE automation_points (
   idx     INTEGER NOT NULL,
   pos     REAL NOT NULL,    -- 0..1 across the clip
   value   REAL NOT NULL,    -- normalized 0..1
+  tension REAL NOT NULL DEFAULT 0,
+  PRIMARY KEY (clip_id, idx)
+);
+
+-- Per-clip volume envelopes (absent rows = flat envelope).
+CREATE TABLE clip_envelope_points (
+  clip_id INTEGER NOT NULL REFERENCES clips(id) ON DELETE CASCADE,
+  idx     INTEGER NOT NULL,
+  pos     REAL NOT NULL,    -- 0..1 across the clip
+  value   REAL NOT NULL,    -- gain multiplier 0..1
   tension REAL NOT NULL DEFAULT 0,
   PRIMARY KEY (clip_id, idx)
 );

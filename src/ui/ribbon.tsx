@@ -5,9 +5,9 @@ import { Action, AppState } from '../store';
 import { THEMES, UI_SCALES } from '../themes';
 import { AutoTarget, PPQ, SNAP_CHOICES, Tool } from '../types';
 import {
-  BrushIcon, DownloadIcon, FilePlusIcon, FolderOpenIcon, LoopIcon, MicIcon, MuteIcon, MusicIcon,
-  PencilIcon, PlayIcon, RedoIcon, SaveIcon, ScissorsIcon, SelectIcon, SpeakerIcon,
-  SplineIcon, StepBackIcon, StopIcon, UndoIcon, UploadIcon, WaveIcon,
+  BrushIcon, DownloadIcon, EnvelopeIcon, FilePlusIcon, FolderOpenIcon, LoopIcon, MicIcon, MuteIcon,
+  MusicIcon, PencilIcon, PlayIcon, RedoIcon, SaveIcon, ScissorsIcon, SelectIcon, SpeakerIcon,
+  SplineIcon, StepBackIcon, StopIcon, StretchIcon, UndoIcon, UploadIcon, WaveIcon,
 } from './icons';
 
 export const RibbonButton = ({ icon: IconEl, active, disabled, onClick, label, caption }: {
@@ -62,6 +62,7 @@ const TOOLS: Array<{ tool: Tool; label: string; icon: (p: { size?: number }) => 
   { tool: 'slice', label: 'Slice (C) — click a clip to split it at that (snapped) position', icon: ScissorsIcon },
   { tool: 'mute', label: 'Mute (T) — click a clip to toggle it silent without removing it', icon: MuteIcon },
   { tool: 'select', label: 'Select (E) — drag a marquee across clips; Shift toggles, Del deletes, dragging moves the whole selection', icon: SelectIcon },
+  { tool: 'stretch', label: 'Stretch (S) — grab a clip\'s beginning or end and drag to time-stretch the audio in place (pitch preserved, 0.25×–4×)', icon: StretchIcon },
 ];
 
 export const Ribbon = (props: RibbonProps): React.ReactElement => {
@@ -163,6 +164,12 @@ export const Ribbon = (props: RibbonProps): React.ReactElement => {
                   label={t.label}
                 />
               ))}
+              <RibbonButton
+                icon={EnvelopeIcon}
+                active={ui.envelopeMode}
+                onClick={() => dispatch({ type: 'toggle-envelope-mode' })}
+                label="Clip envelope mode — overlays an editable volume-envelope spline on every loop clip: click the clip to add a point, drag points freely (horizontal + vertical), drag the square mid-segment handles for tension, right-click a point to remove it (right-click an end point to clear the whole envelope)"
+              />
               <label className="rb-field" title="grid snap resolution — placement, moves and slices round to this; hold Alt to bypass">
                 <select
                   value={ui.snap}

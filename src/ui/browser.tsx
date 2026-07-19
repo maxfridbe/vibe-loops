@@ -19,6 +19,7 @@ interface BrowserProps {
   onFocusLoop: (loopId: number) => void;
   onToggleAudition: (loop: Loop) => void;
   onBeginDrag: (loopId: number, x: number, y: number) => void;
+  onRequestRename: (loop: Loop) => void;
 }
 
 const fmtDur = (loop: Loop): string => {
@@ -27,7 +28,7 @@ const fmtDur = (loop: Loop): string => {
 };
 
 export const Browser = ({
-  loops, focusedLoopId, auditioningLoopId, onFocusLoop, onToggleAudition, onBeginDrag,
+  loops, focusedLoopId, auditioningLoopId, onFocusLoop, onToggleAudition, onBeginDrag, onRequestRename,
 }: BrowserProps): React.ReactElement => {
   const [filter, setFilter] = React.useState('');
   const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({});
@@ -70,12 +71,13 @@ export const Browser = ({
                 <div
                   key={loop.id}
                   className={`browser-row${loop.id === focusedLoopId ? ' focused' : ''}`}
-                  title={`${loop.name} — ${loop.bpm.toFixed(0)} BPM, ${loop.beats} beats, ${fmtDur(loop)}${loop.keySig ? `, ${loop.keySig}` : ''} (${loop.license}). Click to focus, drag onto the playlist to place.`}
+                  title={`${loop.name} — ${loop.bpm.toFixed(0)} BPM, ${loop.beats} beats, ${fmtDur(loop)}${loop.keySig ? `, ${loop.keySig}` : ''}${loop.license ? ` (${loop.license})` : ''}. Click to focus, drag onto the playlist to place, double-click to rename.`}
                   onMouseDown={e => {
                     if (e.button !== 0) return;
                     onFocusLoop(loop.id);
                     onBeginDrag(loop.id, e.clientX, e.clientY);
                   }}
+                  onDoubleClick={() => onRequestRename(loop)}
                 >
                   <button
                     className={`browser-row-play${playing ? ' playing' : ''}`}

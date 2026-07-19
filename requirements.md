@@ -26,7 +26,7 @@ Status: ✅ implemented · 🚧 planned
 | REQ-ARCH-0006 | The build is orchestrated by `Build.sh` using only `tsc`, `sqlite3`, `openssl`, `ffmpeg` (asset prep) and coreutils. | ✅ |
 | REQ-ARCH-0007 | TypeScript type definitions for vendored libraries are checked in under `typings/` (dev-only, fetched once from npm tarballs, never shipped). | ✅ |
 | REQ-ARCH-0008 | The starter loop collection is assembled at build time from `assets/loops/*.mp3` + `assets/loops.tsv` into a SQLite database `dist/library.vibeloop` by `scripts/build-library.sh` (sqlite3 CLI `readfile()`; no scripting runtime). | ✅ |
-| REQ-ARCH-0009 | Starter loops are acquired reproducibly by `scripts/make-loops.sh`: CC0 downloads (Sonic Pi sample collection, flac→mp3 via ffmpeg) plus loops synthesized from scratch with ffmpeg expression filters; all < 20 s. | ✅ |
+| REQ-ARCH-0009 | Starter loops are acquired reproducibly by `scripts/make-loops.sh`: CC0 downloads (17 Sonic Pi samples, flac→mp3 via ffmpeg) plus 19 loops synthesized from scratch with ffmpeg expression filters (36 total); all < 20 s. | ✅ |
 
 ## Web front-end
 
@@ -65,6 +65,10 @@ Status: ✅ implemented · 🚧 planned
 | REQ-WFE-0031 | The View tab offers an interface-size control (80–150%) that scales the whole rem-based UI via the root font size, persisted in `localStorage`. | ✅ |
 | REQ-WFE-0032 | Every ribbon/transport control carries an explanatory hover tooltip (`title`). | ✅ |
 | REQ-WFE-0033 | Clip move gestures apply deltas relative to the gesture-start position (never the current one), so dragging cannot accelerate or compound. | ✅ |
+| REQ-WFE-0034 | Clip envelope mode (ribbon toggle): loop clips overlay an editable volume-envelope spline — click adds a point, points drag horizontally and vertically, mid-segment handles set tension, right-click removes a point (end point clears the envelope). Clips with envelopes always display the curve. | ✅ |
+| REQ-WFE-0035 | Stretch tool (S): dragging a clip's beginning or end time-stretches the audio in place (per-clip ratio 0.25×–4×, pitch preserved); the clip label shows the ratio and the slip offset scales with it. | ✅ |
+| REQ-WFE-0036 | Library loops (including imported and recorded ones) can be renamed via double-click on the browser row, using the in-app rename modal. | ✅ |
+| REQ-WFE-0037 | Track volume and pan sliders are visually distinct: volume is an accent-colored ramp with a round thumb; pan has a center-notched track with a square warm-colored thumb. Both tooltips report the current value. | ✅ |
 
 ## Audio engine
 
@@ -78,6 +82,8 @@ Status: ✅ implemented · 🚧 planned
 | REQ-AUD-0006 | Auditioning plays a loop immediately on a preview path without interrupting arrangement playback state (FR-BRW-002 analogue). | ✅ |
 | REQ-AUD-0007 | Playback stops automatically at the end of the arrangement and reports the playhead accurately during playback. | ✅ |
 | REQ-AUD-0008 | Offline export renders the identical scheduling graph through `OfflineAudioContext` (faster than realtime) at 44.1 kHz stereo. | ✅ |
+| REQ-AUD-0009 | Per-clip volume envelopes are applied as tension-interpolated gain curves on the clip's gain node (before the track chain) in both realtime playback and offline export, correctly windowed when playback starts mid-clip. | ✅ |
+| REQ-AUD-0010 | Per-clip stretch ratios render through the WSOLA stretcher with a (loop, BPM, ratio)-keyed cache; clip audio tiles at the stretched period. | ✅ |
 
 ## Data model & persistence
 
@@ -95,6 +101,8 @@ Status: ✅ implemented · 🚧 planned
 | REQ-DAT-0010 | Users can import `.mid`/`.midi` files: a built-in SMF parser (formats 0/1, PPQ, tempo) feeds a small offline synth (detuned triangles + lowpass) whose render enters the same trim dialog. | ✅ |
 | REQ-DAT-0011 | Users can record loops from the microphone (getUserMedia + MediaRecorder) into the same trim dialog and thus into the library. | ✅ |
 | REQ-DAT-0012 | Imported/recorded loops persist like any other: they are embedded in saved `.vibeloop` files and auto-focused for immediate placement. | ✅ |
+| REQ-DAT-0013 | Clip envelopes persist in `.vibeloop` (format v2, `clip_envelope_points` table); v1 files without the table load cleanly. Slicing a clip splits its envelope correctly across both halves. | ✅ |
+| REQ-DAT-0014 | Per-clip stretch persists as `clips.stretch_ticks` (NULL = natural length); v1 files load with no stretch. | ✅ |
 
 ## Deployment
 

@@ -664,6 +664,72 @@ html, body {
 .pl-head-sliders input[type='range'] {
   width: 50%;
   height: 0.9em;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* volume: accent-colored ramp track with a round thumb */
+.pl-head-sliders input.vol::-webkit-slider-runnable-track {
+  height: 0.3em;
+  border-radius: 0.15em;
+  background: linear-gradient(to right, var(--border), var(--accent));
+}
+.pl-head-sliders input.vol::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 0.09em solid #fff;
+  margin-top: -0.2em;
+}
+.pl-head-sliders input.vol::-moz-range-track {
+  height: 0.3em;
+  border-radius: 0.15em;
+  background: linear-gradient(to right, var(--border), var(--accent));
+}
+.pl-head-sliders input.vol::-moz-range-thumb {
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 0.09em solid #fff;
+}
+
+/* pan: symmetric track with a center notch and a square warm thumb */
+.pl-head-sliders input.pan::-webkit-slider-runnable-track {
+  height: 0.3em;
+  border-radius: 0.15em;
+  background: linear-gradient(to right,
+    var(--accent-warm) 0 6%, var(--border) 6% 48%,
+    var(--text-dim) 48% 52%,
+    var(--border) 52% 94%, var(--accent-warm) 94% 100%);
+}
+.pl-head-sliders input.pan::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 0.55em;
+  height: 0.8em;
+  border-radius: 0.12em;
+  background: var(--accent-warm);
+  border: 0.09em solid #fff;
+  margin-top: -0.25em;
+}
+.pl-head-sliders input.pan::-moz-range-track {
+  height: 0.3em;
+  border-radius: 0.15em;
+  background: linear-gradient(to right,
+    var(--accent-warm) 0 6%, var(--border) 6% 48%,
+    var(--text-dim) 48% 52%,
+    var(--border) 52% 94%, var(--accent-warm) 94% 100%);
+}
+.pl-head-sliders input.pan::-moz-range-thumb {
+  width: 0.55em;
+  height: 0.8em;
+  border-radius: 0.12em;
+  background: var(--accent-warm);
+  border: 0.09em solid #fff;
 }
 
 .pl-addtrack {
@@ -783,6 +849,37 @@ html, body {
 .playlist[data-tool='select'] .pl-row,
 .playlist[data-tool='select'] .pl-clip,
 .playlist[data-tool='select'] .pl-auto { cursor: crosshair; }
+.playlist[data-tool='stretch'] .pl-clip { cursor: ew-resize; }
+
+/* per-clip volume envelope overlay */
+.pl-clip-stretch {
+  margin-left: 0.5em;
+  font-size: 0.9em;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+.pl-env-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.pl-env-fill { fill: #2fe08c; opacity: 0.14; }
+.pl-env-line { stroke: #2fe08c; stroke-width: 0.1; }
+.pl-env-point {
+  fill: #2fe08c;
+  stroke: #fff;
+  stroke-width: 0.06;
+  cursor: ns-resize;
+  pointer-events: auto;
+}
+.pl-env-tension {
+  fill: #fff;
+  opacity: 0.7;
+  cursor: ns-resize;
+  pointer-events: auto;
+}
 
 /* ------------------------------------------------------------------ modals */
 

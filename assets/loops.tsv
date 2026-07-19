@@ -15,3 +15,23 @@ synth_bass.mp3	Pulse Bass	bass	120	8	Am	CC0	synthesized
 synth_arp.mp3	Cascade Arp	melodic	128	8	Am	CC0	synthesized
 synth_pad.mp3	Drift Pad	pads	90	8	Am	CC0	synthesized
 synth_hats.mp3	Tick Hats	perc	140	8		CC0	synthesized
+loop_amen_full.mp3	Amen Full	drums	140.00	16		CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+loop_3d_printer.mp3	Printer	fx	120.62	16		CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+loop_drone_g_97.mp3	Drone G	pads	97.00	8	G	CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+loop_mehackit1.mp3	Mehackit One	melodic	97.00	4		CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+loop_mehackit2.mp3	Mehackit Two	melodic	97.00	4		CC0	https://github.com/sonic-pi-net/sonic-pi/tree/dev/etc/samples
+synth_bass_em.mp3	Night Bass	bass	100	8	Em	CC0	synthesized
+synth_bass_acid.mp3	Acid Line	bass	130	8	Am	CC0	synthesized
+synth_bass_sub.mp3	Sub Pulse	bass	140	8	F	CC0	synthesized
+synth_arp_maj.mp3	Sunrise Arp	melodic	110	8	C	CC0	synthesized
+synth_arp_fast.mp3	Hyper Arp	melodic	150	8	Dm	CC0	synthesized
+synth_lead_chip.mp3	Chip Lead	melodic	120	8	C	CC0	synthesized
+synth_bell.mp3	Bell Line	melodic	90	8	Am	CC0	synthesized
+synth_pad_maj.mp3	Golden Pad	pads	80	8	C	CC0	synthesized
+synth_pad_dark.mp3	Umbra Pad	pads	70	8	Dm	CC0	synthesized
+synth_kick_four.mp3	Four Floor	drums	128	8		CC0	synthesized
+synth_kick_break.mp3	Kick Pattern	drums	100	8		CC0	synthesized
+synth_clap.mp3	Clap Track	perc	120	8		CC0	synthesized
+synth_hats_off.mp3	Offbeat Hats	perc	128	8		CC0	synthesized
+synth_toms.mp3	Tom Groove	perc	110	8		CC0	synthesized
+synth_riser.mp3	Lift FX	fx	120	16		CC0	synthesized

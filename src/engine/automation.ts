@@ -28,15 +28,18 @@ const shape = (t: number, tension: number): number => {
   return Math.pow(t, k);
 };
 
-// Samples the clip curve into a Float32Array suitable for
+// Samples a point curve into a Float32Array suitable for
 // AudioParam.setValueCurveAtTime.
-export function sampleAutoCurve(clip: AutoClip, samples: number): Float32Array {
+export function samplePointCurve(points: AutoPoint[], samples: number): Float32Array {
   const out = new Float32Array(Math.max(2, samples));
   for (let i = 0; i < out.length; i++) {
-    out[i] = autoValueAt(clip.points, i / (out.length - 1));
+    out[i] = autoValueAt(points, i / (out.length - 1));
   }
   return out;
 }
+
+export const sampleAutoCurve = (clip: AutoClip, samples: number): Float32Array =>
+  samplePointCurve(clip.points, samples);
 
 // Maps a normalized automation value (0..1) onto the actual parameter range.
 export const denormalize = (target: string, v: number): number =>

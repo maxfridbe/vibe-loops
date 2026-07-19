@@ -8,7 +8,7 @@ import { AudioEngine } from '../engine/audio';
 import { autoValueAt } from '../engine/automation';
 import { Action, AppState } from '../store';
 import {
-  AutoClip, Clip, Loop, PPQ, Track, loopLengthTicks, snapTicks,
+  AutoClip, AutoPoint, Clip, Loop, PPQ, Track, clipPeriodTicks, loopLengthTicks, snapTicks,
 } from '../types';
 import { LoopDrag } from './browser';
 
@@ -48,7 +48,20 @@ type Gesture =
   | { kind: 'marquee'; x0: number; y0: number }
   | { kind: 'scrub' }
   | { kind: 'auto-point'; clipId: number; index: number }
-  | { kind: 'auto-tension'; clipId: number; index: number; startY: number; startTension: number };
+  | { kind: 'auto-tension'; clipId: number; index: number; startY: number; startTension: number }
+  | { kind: 'stretch-l' | 'stretch-r'; id: number; origStart: number; origLen: number; origPeriod: number; origOffset: number; natural: number }
+  | { kind: 'env-point'; clipId: number; index: number }
+  | { kind: 'env-tension'; clipId: number; index: number; startY: number; startTension: number };
+
+// Splits a clip envelope at frac (0..1) into two envelopes rescaled to 0..1.
+const splitEnvelope = (points: AutoPoint[], frac: number): [AutoPoint[], AutoPoint[]] => {
+  const boundary = autoValueAt(points, frac);
+  const left = points.filter(pt => pt.pos < frac).map(pt => ({ ...pt, pos: pt.pos / frac }));
+  left.push({ pos: 1, value: boundary, tension: 0 });
+  const right = points.filter(pt => pt.pos > frac).map(pt => ({ ...pt, pos: (pt.pos - frac) / (1 - frac) }));
+  right.unshift({ pos: 0, value: boundary, tension: 0 });
+  return [left, right];
+};
 
 let gestureCounter = 0;
 
@@ -259,6 +272,65 @@ export const Playlist = ({
           }), entry.id);
           break;
         }
+        case 'stretch-l':
+        case 'stretch-r': {
+          const t = snap(p.tick, bypass);
+          const origEnd = g.origStart + g.origLen;
+          let newLen: number;
+          if (g.kind === 'stretch-r') {
+            newLen = Math.max(MIN_CLIP_TICKS, t - g.origStart);
+          } else {
+            newLen = Math.max(MIN_CLIP_TICKS, origEnd - Math.min(t, origEnd - MIN_CLIP_TICKS));
+          }
+          // clamp the resulting stretch ratio to a usable range
+          let factor = newLen / g.origLen;
+          const ratio = Math.min(4, Math.max(0.25, (g.origPeriod * factor) / g.natural));
+          const newPeriod = g.natural * ratio;
+          factor = newPeriod / g.origPeriod;
+          const len = Math.max(MIN_CLIP_TICKS, Math.round(g.origLen * factor));
+          editClips(project.clips.map(c => {
+            if (c.id !== g.id) return c;
+            return {
+              ...c,
+              startTicks: g.kind === 'stretch-l' ? Math.max(0, origEnd - len) : g.origStart,
+              lengthTicks: len,
+              offsetTicks: Math.round(g.origOffset * factor),
+              stretchTicks: Math.abs(ratio - 1) < 0.01 ? undefined : Math.round(newPeriod),
+            };
+          }), entry.id);
+          break;
+        }
+        case 'env-point': {
+          const clip = project.clips.find(c => c.id === g.clipId);
+          if (!clip || !clip.envelope) break;
+          const relPos = (p.tick - clip.startTicks) / clip.lengthTicks;
+          const idx = trackIdxById.get(clip.trackId) ?? 0;
+          const laneTop = RULER_H + idx * TRACK_H + CLIP_LABEL_H;
+          const laneH = TRACK_H - CLIP_LABEL_H - 0.25;
+          const value = Math.min(1, Math.max(0, 1 - (p.y - laneTop) / laneH));
+          editClips(project.clips.map(c => {
+            if (c.id !== g.clipId || !c.envelope) return c;
+            const pts = c.envelope.map((pt, i) => {
+              if (i !== g.index) return pt;
+              const lo = i === 0 ? 0 : c.envelope![i - 1].pos + 0.001;
+              const hi = i === c.envelope!.length - 1 ? 1 : c.envelope![i + 1].pos - 0.001;
+              const fixed = i === 0 ? 0 : i === c.envelope!.length - 1 ? 1 : Math.min(hi, Math.max(lo, relPos));
+              return { ...pt, pos: fixed, value };
+            });
+            return { ...c, envelope: pts };
+          }), entry.id);
+          break;
+        }
+        case 'env-tension': {
+          const dyRem = (e.clientY - g.startY) / rootRem();
+          const tension = Math.min(1, Math.max(-1, g.startTension + dyRem / 4));
+          editClips(project.clips.map(c => {
+            if (c.id !== g.clipId || !c.envelope) return c;
+            const pts = c.envelope.map((pt, i) => (i === g.index ? { ...pt, tension } : pt));
+            return { ...c, envelope: pts };
+          }), entry.id);
+          break;
+        }
       }
     };
     const onUp = (): void => {
@@ -366,6 +438,26 @@ export const Playlist = ({
 
   const onClipMouseDown = (e: React.MouseEvent, clip: Clip): void => {
     e.stopPropagation();
+    if (ui.envelopeMode) {
+      // envelope editing takes over: click adds a point and drags it
+      if (e.button === 2) return;
+      const p0 = pos(e);
+      const relPos = Math.min(1, Math.max(0, (p0.tick - clip.startTicks) / clip.lengthTicks));
+      const idx = trackIdxById.get(clip.trackId) ?? 0;
+      const laneTop = RULER_H + idx * TRACK_H + CLIP_LABEL_H;
+      const laneH = TRACK_H - CLIP_LABEL_H - 0.25;
+      const value = Math.min(1, Math.max(0, 1 - (p0.y - laneTop) / laneH));
+      const base = clip.envelope ?? [
+        { pos: 0, value: 1, tension: 0 },
+        { pos: 1, value: 1, tension: 0 },
+      ];
+      const pts = [...base, { pos: relPos, value, tension: 0 }].sort((a, b) => a.pos - b.pos);
+      const index = pts.findIndex(pt => pt.pos === relPos && pt.value === value);
+      const id = `g${++gestureCounter}`;
+      editClips(project.clips.map(c => (c.id === clip.id ? { ...c, envelope: pts } : c)), id);
+      gestureRef.current = { g: { kind: 'env-point', clipId: clip.id, index }, id };
+      return;
+    }
     if (e.button === 2) {
       editClips(project.clips.filter(c => c.id !== clip.id), `g${++gestureCounter}`);
       return;
@@ -379,15 +471,43 @@ export const Playlist = ({
       case 'slice': {
         const at = snap(p.tick, e.altKey);
         if (at > clip.startTicks && at < clip.startTicks + clip.lengthTicks) {
-          const first: Clip = { ...clip, lengthTicks: at - clip.startTicks };
+          const frac = (at - clip.startTicks) / clip.lengthTicks;
+          const [envL, envR] = clip.envelope ? splitEnvelope(clip.envelope, frac) : [undefined, undefined];
+          const first: Clip = { ...clip, lengthTicks: at - clip.startTicks, envelope: envL };
           const second: Clip = {
             ...clip,
             id: state.nextId,
             startTicks: at,
             lengthTicks: clip.startTicks + clip.lengthTicks - at,
             offsetTicks: clip.offsetTicks + (at - clip.startTicks),
+            envelope: envR,
           };
           editClips(project.clips.flatMap(c => (c.id === clip.id ? [first, second] : [c])), `g${++gestureCounter}`);
+        }
+        break;
+      }
+      case 'stretch': {
+        const loop = loopById.get(clip.loopId);
+        if (!loop) break;
+        if (nearR || nearL) {
+          beginGesture({
+            kind: nearR ? 'stretch-r' : 'stretch-l',
+            id: clip.id,
+            origStart: clip.startTicks,
+            origLen: clip.lengthTicks,
+            origPeriod: clipPeriodTicks(clip, loop),
+            origOffset: clip.offsetTicks,
+            natural: loopLengthTicks(loop),
+          });
+        } else {
+          const members = [clip];
+          beginGesture({
+            kind: 'move', ids: [clip.id],
+            startTicks: new Map(members.map(c => [c.id, c.startTicks])),
+            startTrackIdxs: new Map(members.map(c => [c.id, trackIdxById.get(c.trackId) ?? 0])),
+            startTrackIdx: trackIdxById.get(clip.trackId) ?? 0,
+            grabTick: p.tick, auto: false,
+          });
         }
         break;
       }
@@ -533,6 +653,25 @@ export const Playlist = ({
                 }), `g${++gestureCounter}`);
               }}
               onRename={track => setRenaming({ track, name: track.name })}
+              onEnvPointMouseDown={(e, clip, index) => {
+                e.stopPropagation();
+                if (e.button === 2) {
+                  const isEndpoint = index === 0 || index === (clip.envelope?.length ?? 0) - 1;
+                  editClips(project.clips.map(c => {
+                    if (c.id !== clip.id || !c.envelope) return c;
+                    if (isEndpoint || c.envelope.length <= 2) return { ...c, envelope: undefined };
+                    return { ...c, envelope: c.envelope.filter((_, i) => i !== index) };
+                  }), `g${++gestureCounter}`);
+                } else {
+                  beginGesture({ kind: 'env-point', clipId: clip.id, index });
+                }
+              }}
+              onEnvTensionMouseDown={(e, clip, index, startTension) => {
+                e.stopPropagation();
+                if (e.button === 0) {
+                  beginGesture({ kind: 'env-tension', clipId: clip.id, index, startY: e.clientY, startTension });
+                }
+              }}
               dispatch={dispatch}
               engine={engine}
             />
@@ -619,13 +758,16 @@ interface TrackRowProps {
   beginTensionGesture: (clipId: number, index: number, startY: number, startTension: number) => void;
   removePoint: (clipId: number, index: number) => void;
   onRename: (track: Track) => void;
+  onEnvPointMouseDown: (e: React.MouseEvent, clip: Clip, index: number) => void;
+  onEnvTensionMouseDown: (e: React.MouseEvent, clip: Clip, index: number, startTension: number) => void;
   dispatch: (a: Action) => void;
   engine: AudioEngine;
 }
 
 const TrackRow = ({
   track, state, gridBg, contentW, onEmptyMouseDown, onClipMouseDown, onAutoClipMouseDown,
-  beginPointGesture, beginTensionGesture, removePoint, onRename, dispatch, engine,
+  beginPointGesture, beginTensionGesture, removePoint, onRename,
+  onEnvPointMouseDown, onEnvTensionMouseDown, dispatch, engine,
 }: TrackRowProps): React.ReactElement => {
   const { project, ui } = state;
   const rpb = ui.remPerBeat;
@@ -661,11 +803,15 @@ const TrackRow = ({
         </div>
         <div className="pl-head-sliders">
           <input
-            type="range" min="0" max="1.25" step="0.01" value={track.volume} title="volume"
+            className="vol"
+            type="range" min="0" max="1.25" step="0.01" value={track.volume}
+            title={`track volume: ${Math.round(track.volume * 100)}%`}
             onChange={e => dispatch({ type: 'update-track', track: { ...track, volume: Number(e.target.value) } })}
           />
           <input
-            type="range" min="-1" max="1" step="0.01" value={track.pan} title="pan"
+            className="pan"
+            type="range" min="-1" max="1" step="0.01" value={track.pan}
+            title={`track pan: ${track.pan === 0 ? 'center' : track.pan < 0 ? `${Math.round(-track.pan * 100)}% left` : `${Math.round(track.pan * 100)}% right`}`}
             onChange={e => dispatch({ type: 'update-track', track: { ...track, pan: Number(e.target.value) } })}
           />
         </div>
@@ -682,8 +828,11 @@ const TrackRow = ({
             color={track.color}
             rpb={rpb}
             selected={ui.selection.includes(clip.id)}
+            envelopeMode={ui.envelopeMode}
             engine={engine}
             onMouseDown={e => onClipMouseDown(e, clip)}
+            onEnvPointMouseDown={(e, index) => onEnvPointMouseDown(e, clip, index)}
+            onEnvTensionMouseDown={(e, index, t) => onEnvTensionMouseDown(e, clip, index, t)}
           />
         );
       })}
@@ -704,15 +853,23 @@ const TrackRow = ({
   );
 };
 
-const ClipView = ({ clip, loop, color, rpb, selected, engine, onMouseDown }: {
+const ClipView = ({
+  clip, loop, color, rpb, selected, envelopeMode, engine, onMouseDown,
+  onEnvPointMouseDown, onEnvTensionMouseDown,
+}: {
   clip: Clip; loop: Loop; color: string; rpb: number; selected: boolean;
+  envelopeMode: boolean;
   engine: AudioEngine;
   onMouseDown: (e: React.MouseEvent) => void;
+  onEnvPointMouseDown: (e: React.MouseEvent, index: number) => void;
+  onEnvTensionMouseDown: (e: React.MouseEvent, index: number, startTension: number) => void;
 }): React.ReactElement => {
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const [, bump] = React.useReducer((x: number) => x + 1, 0);
   const wRem = Math.max(0.125, ticksToRem(clip.lengthTicks, rpb));
   const hRem = TRACK_H - 0.25;
+  const period = clipPeriodTicks(clip, loop); // stretch-aware tile length
+  const stretched = clip.stretchTicks !== undefined;
 
   React.useEffect(() => {
     const canvas = canvasRef.current;
@@ -727,27 +884,43 @@ const ClipView = ({ clip, loop, color, rpb, selected, engine, onMouseDown }: {
     ctx.clearRect(0, 0, wPx, hPx);
     const peaks = engine.peaksFor(loop, bump);
     if (!peaks) return;
-    const loopTicks = loopLengthTicks(loop);
     const labelPx = CLIP_LABEL_H * unit;
     const waveH = hPx - labelPx - 2;
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
     for (let x = 0; x < wPx; x++) {
       const tick = clip.offsetTicks + remToTicks(x / unit, rpb);
-      const inLoop = ((tick % loopTicks) + loopTicks) % loopTicks;
-      const bucket = Math.min(peaks.length - 1, Math.floor((inLoop / loopTicks) * peaks.length));
+      const inLoop = ((tick % period) + period) % period;
+      const bucket = Math.min(peaks.length - 1, Math.floor((inLoop / period) * peaks.length));
       const p = peaks[bucket];
       const bh = Math.max(1, p * waveH);
       ctx.fillRect(x, labelPx + (waveH - bh) / 2, 1, bh);
     }
     // loop repeat boundaries
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    for (let k = Math.ceil(clip.offsetTicks / loopTicks); ; k++) {
-      const xRem = ticksToRem(k * loopTicks - clip.offsetTicks, rpb);
+    for (let k = Math.ceil(clip.offsetTicks / period); ; k++) {
+      const xRem = ticksToRem(k * period - clip.offsetTicks, rpb);
       const x = xRem * unit;
       if (x >= wPx) break;
       if (x > 0) ctx.fillRect(Math.round(x), labelPx, 1, waveH);
     }
   });
+
+  const envLane = hRem - CLIP_LABEL_H - 0.125;
+  const envPts = clip.envelope ?? [
+    { pos: 0, value: 1, tension: 0 },
+    { pos: 1, value: 1, tension: 0 },
+  ];
+  const envXY = (posn: number, value: number): [number, number] =>
+    [posn * wRem, CLIP_LABEL_H + (1 - value) * envLane];
+  let envPath = '';
+  if (envelopeMode || clip.envelope) {
+    const STEPS = Math.max(16, Math.min(128, Math.round(wRem * 4)));
+    for (let i = 0; i <= STEPS; i++) {
+      const posn = i / STEPS;
+      const [x, y] = envXY(posn, autoValueAt(envPts, posn));
+      envPath += `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
+    }
+  }
 
   return (
     <div
@@ -760,8 +933,45 @@ const ClipView = ({ clip, loop, color, rpb, selected, engine, onMouseDown }: {
       }}
       onMouseDown={onMouseDown}
     >
-      <div className="pl-clip-label">{loop.name}</div>
+      <div className="pl-clip-label">
+        {loop.name}
+        {stretched && (
+          <span className="pl-clip-stretch">
+            ×{(period / loopLengthTicks(loop)).toFixed(2)}
+          </span>
+        )}
+      </div>
       <canvas ref={canvasRef} />
+      {(envelopeMode || clip.envelope) && (
+        <svg viewBox={`0 0 ${wRem} ${hRem}`} preserveAspectRatio="none" className="pl-env-svg">
+          <path d={`${envPath}L${wRem},${hRem}L0,${hRem}Z`} className="pl-env-fill" stroke="none" />
+          <path d={envPath} className="pl-env-line" fill="none" />
+          {envelopeMode && clip.envelope && clip.envelope.map((pt, i) => {
+            const [x, y] = envXY(pt.pos, pt.value);
+            return (
+              <circle
+                key={i}
+                cx={x} cy={y} r="0.22"
+                className="pl-env-point"
+                onMouseDown={e => onEnvPointMouseDown(e, i)}
+              />
+            );
+          })}
+          {envelopeMode && clip.envelope && clip.envelope.slice(0, -1).map((pt, i) => {
+            const next = clip.envelope![i + 1];
+            const midPos = (pt.pos + next.pos) / 2;
+            const [x, y] = envXY(midPos, autoValueAt(clip.envelope!, midPos));
+            return (
+              <rect
+                key={`t${i}`}
+                x={x - 0.16} y={y - 0.16} width="0.32" height="0.32"
+                className="pl-env-tension"
+                onMouseDown={e => onEnvTensionMouseDown(e, i, pt.tension)}
+              />
+            );
+          })}
+        </svg>
+      )}
     </div>
   );
 };
