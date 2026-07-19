@@ -1,5 +1,7 @@
 # TRY NOW: [Vibe Loops Live](https://maxfridbe.github.io/vibe-loops/)
 
+![Vibe Loops — loop clips with waveforms, a clip volume envelope, and a track-volume automation clip on the playlist](media/screenshot.png)
+
 # Vibe Loops
 
 A serverless, single-page loop-based DAW that runs entirely in one browser.
