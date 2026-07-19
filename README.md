@@ -61,6 +61,7 @@ All implemented functionality is tracked with requirement IDs in
 | Play / stop | Space |
 | Seek / scrub | click / drag the bar ruler |
 | Undo / redo | Ctrl+Z / Ctrl+Shift+Z |
+| Shortcut reference | ? (or the ribbon help button) |
 
 ## Architecture
 

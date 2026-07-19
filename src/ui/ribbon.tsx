@@ -54,6 +54,7 @@ interface RibbonProps {
   onRecord: () => void;
   onExportMp3: () => void;
   onExportWav: () => void;
+  onHelp: () => void;
 }
 
 const TOOLS: Array<{ tool: Tool; label: string; icon: (p: { size?: number }) => React.ReactElement }> = [
@@ -69,6 +70,7 @@ export const Ribbon = (props: RibbonProps): React.ReactElement => {
   const {
     state, dispatch, playheadTicks, uiScale, onSetUiScale,
     onPlay, onPlayFromStart, onStop, onNew, onOpen, onSave, onImport, onRecord, onExportMp3, onExportWav,
+    onHelp,
   } = props;
   const { project, ui } = state;
   const [tab, setTab] = React.useState<RibbonTab>('home');
@@ -137,6 +139,7 @@ export const Ribbon = (props: RibbonProps): React.ReactElement => {
           </label>
         </div>
 
+        <button className="rb-help" title="keyboard shortcuts and mouse reference (?)" onClick={onHelp}>?</button>
         <div className="rb-status" title="status">{state.status}</div>
       </div>
 

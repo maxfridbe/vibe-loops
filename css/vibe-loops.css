@@ -433,6 +433,54 @@ html, body {
 
 .rb-zoom input[type='range'] { width: 8em; }
 
+.rb-help {
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  border: 0.0625rem solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: 0.85em;
+  cursor: pointer;
+  align-self: center;
+}
+.rb-help:hover { color: var(--accent); border-color: var(--accent); }
+
+/* help dialog */
+.vl-help { max-height: 85vh; overflow-y: auto; }
+.vl-help-columns {
+  display: flex;
+  gap: 2em;
+  flex-wrap: wrap;
+}
+.vl-help-columns > div { flex: 1; min-width: 18em; }
+.vl-help-heading {
+  font-size: 0.7em;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  margin-bottom: 0.6em;
+}
+.vl-help-table { border-collapse: collapse; width: 100%; }
+.vl-help-table td {
+  padding: 0.25em 0.6em 0.25em 0;
+  font-size: 0.8em;
+  vertical-align: top;
+  border-bottom: 0.0625rem solid var(--border);
+}
+.vl-help-table td:first-child { white-space: nowrap; color: var(--text); }
+.vl-help-table td:last-child { color: var(--text-dim); }
+.vl-help-table kbd {
+  background: var(--bg-raised);
+  border: 0.0625rem solid var(--border);
+  border-bottom-width: 0.125rem;
+  border-radius: 0.25em;
+  padding: 0.1em 0.4em;
+  font-family: inherit;
+  font-size: 0.95em;
+}
+.vl-help-action { font-style: italic; }
+
 /* ----------------------------------------------------------------- browser */
 
 .browser {

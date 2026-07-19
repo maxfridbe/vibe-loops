@@ -11,6 +11,7 @@ import { makeInitialState, reducer } from './store';
 import { applyTheme, applyUiScale, loadTheme, loadUiScale } from './themes';
 import { Loop, Project } from './types';
 import { Browser, LoopDrag } from './ui/browser';
+import { HelpDialog } from './ui/helpDialog';
 import { RecordDialog, TrimDialog, TrimResult } from './ui/importDialog';
 import { Playlist } from './ui/playlist';
 import { Ribbon } from './ui/ribbon';
@@ -40,6 +41,7 @@ export const App = (): React.ReactElement => {
   const [auditioningLoopId, setAuditioningLoopId] = React.useState<number | null>(null);
   const [importState, setImportState] = React.useState<ImportState | null>(null);
   const [renamingLoop, setRenamingLoop] = React.useState<{ loop: Loop; name: string } | null>(null);
+  const [helpOpen, setHelpOpen] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const importInputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -138,6 +140,11 @@ export const App = (): React.ReactElement => {
           });
           dispatch({ type: 'set-selection', clipIds: [], autoClipIds: [] });
         }
+      } else if (e.key === '?') {
+        e.preventDefault();
+        setHelpOpen(open => !open);
+      } else if (e.key === 'Escape') {
+        setHelpOpen(false);
       } else if (!e.ctrlKey && !e.metaKey && !e.altKey) {
         const tool = ({ p: 'draw', b: 'paint', c: 'slice', t: 'mute', e: 'select', s: 'stretch' } as const)[e.key.toLowerCase()];
         if (tool) dispatch({ type: 'set-tool', tool });
@@ -290,6 +297,7 @@ export const App = (): React.ReactElement => {
         onRecord={() => setImportState({ kind: 'record' })}
         onExportMp3={() => exportAudio('mp3')}
         onExportWav={() => exportAudio('wav')}
+        onHelp={() => setHelpOpen(true)}
       />
       <div className="app-main">
         <Browser
@@ -317,6 +325,7 @@ export const App = (): React.ReactElement => {
           {state.project.loops.find(l => l.id === dragLoop.loopId)?.name}
         </div>
       )}
+      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
       {renamingLoop && (
         <div className="vl-modal-backdrop" onMouseDown={() => setRenamingLoop(null)}>
           <div className="vl-modal" onMouseDown={e => e.stopPropagation()}>
