@@ -16,7 +16,12 @@ const TRACK_H = 4;        // rem
 const RULER_H = 1.625;    // rem
 const HEADER_W = 9.5;     // rem
 const CLIP_LABEL_H = 0.875; // rem
-const EDGE_GRAB = 0.5;    // rem, resize handle width
+// Coarse (touch) pointers get larger grab targets throughout.
+const COARSE = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+const EDGE_GRAB = COARSE ? 0.9 : 0.5; // rem, resize handle width
+const POINT_R = COARSE ? 0.34 : 0.22; // rem, envelope/automation point radius
+const HANDLE_R = COARSE ? 0.26 : 0.16; // rem, tension handle half-size
+const TAP_SLOP_PX = 12;
 const MIN_CLIP_TICKS = PPQ / 8;
 
 const rootRem = (): number =>
@@ -51,7 +56,10 @@ type Gesture =
   | { kind: 'auto-tension'; clipId: number; index: number; startY: number; startTension: number }
   | { kind: 'stretch-l' | 'stretch-r'; id: number; origStart: number; origLen: number; origPeriod: number; origOffset: number; natural: number }
   | { kind: 'env-point'; clipId: number; index: number }
-  | { kind: 'env-tension'; clipId: number; index: number; startY: number; startTension: number };
+  | { kind: 'env-tension'; clipId: number; index: number; startY: number; startTension: number }
+  // touch draw: clip placement happens on tap release, so touch drags can
+  // still scroll the playlist
+  | { kind: 'tap-place'; x0: number; y0: number; trackIdx: number };
 
 // Splits a clip envelope at frac (0..1) into two envelopes rescaled to 0..1.
 const splitEnvelope = (points: AutoPoint[], frac: number): [AutoPoint[], AutoPoint[]] => {
@@ -73,6 +81,29 @@ export const Playlist = ({
   const contentRef = React.useRef<HTMLDivElement | null>(null);
   const playheadRef = React.useRef<HTMLDivElement | null>(null);
   const gestureRef = React.useRef<{ g: Gesture; id: string } | null>(null);
+  // touch long-press: iPadOS Safari fires no contextmenu, so deletes get an
+  // explicit timer (cancelled by movement or release)
+  const longPressRef = React.useRef<{ timer: number; x0: number; y0: number } | null>(null);
+  const cancelLongPress = (): void => {
+    if (longPressRef.current) {
+      clearTimeout(longPressRef.current.timer);
+      longPressRef.current = null;
+    }
+  };
+  const armLongPress = (e: React.PointerEvent, fn: () => void): void => {
+    if (e.pointerType !== 'touch') return;
+    cancelLongPress();
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    longPressRef.current = {
+      x0, y0,
+      timer: window.setTimeout(() => {
+        longPressRef.current = null;
+        gestureRef.current = null;
+        fn();
+      }, 600),
+    };
+  };
   // marquee kept in rem coordinates
   const [marquee, setMarquee] = React.useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [renaming, setRenaming] = React.useState<{ track: Track; name: string } | null>(null);
@@ -124,9 +155,13 @@ export const Playlist = ({
     return clip;
   };
 
-  // --- window-level gesture handling ---------------------------------------
+  // --- window-level gesture handling (pointer events: mouse + touch + pen) --
   React.useEffect(() => {
-    const onMove = (e: MouseEvent): void => {
+    const onMove = (e: PointerEvent): void => {
+      const lp = longPressRef.current;
+      if (lp && (Math.abs(e.clientX - lp.x0) > TAP_SLOP_PX || Math.abs(e.clientY - lp.y0) > TAP_SLOP_PX)) {
+        cancelLongPress();
+      }
       const entry = gestureRef.current;
       if (!entry || !contentRef.current) return;
       const g = entry.g;
@@ -331,24 +366,45 @@ export const Playlist = ({
           }), entry.id);
           break;
         }
+        case 'tap-place':
+          // finger wandered: it's a scroll, not a tap
+          if (Math.abs(e.clientX - g.x0) > TAP_SLOP_PX || Math.abs(e.clientY - g.y0) > TAP_SLOP_PX) {
+            gestureRef.current = null;
+          }
+          break;
       }
     };
-    const onUp = (): void => {
+    const onUp = (e: PointerEvent): void => {
+      cancelLongPress();
+      const entry = gestureRef.current;
+      if (entry?.g.kind === 'tap-place' && contentRef.current) {
+        const g = entry.g;
+        if (Math.abs(e.clientX - g.x0) <= TAP_SLOP_PX && Math.abs(e.clientY - g.y0) <= TAP_SLOP_PX) {
+          placeAt(pos(e).tick, g.trackIdx, e.altKey, entry.id);
+        }
+      }
+      if (entry?.g.kind === 'marquee') setMarquee(null);
+      gestureRef.current = null;
+    };
+    const onCancel = (): void => {
+      cancelLongPress();
       if (gestureRef.current?.g.kind === 'marquee') setMarquee(null);
       gestureRef.current = null;
     };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
     return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
     };
   });
 
   // --- browser drag-and-drop ------------------------------------------------
   React.useEffect(() => {
     if (!dragLoop) return;
-    const onUp = (e: MouseEvent): void => {
+    const onUp = (e: PointerEvent): void => {
       onDragConsumed();
       if (!contentRef.current) return;
       const r = contentRef.current.getBoundingClientRect();
@@ -360,8 +416,12 @@ export const Playlist = ({
       if (!loop) return;
       newClipFromLoop(loop, snap(p.tick, e.altKey), p.trackIdx, `g${++gestureCounter}`);
     };
-    window.addEventListener('mouseup', onUp);
-    return () => window.removeEventListener('mouseup', onUp);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onDragConsumed);
+    return () => {
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onDragConsumed);
+    };
   });
 
   // --- playhead animation ---------------------------------------------------
@@ -378,65 +438,94 @@ export const Playlist = ({
     return () => cancelAnimationFrame(raf);
   }, [ui.playing, playheadTicks, rpb]);
 
-  // --- mousedown dispatchers ------------------------------------------------
+  // --- pointerdown dispatchers ----------------------------------------------
   const beginGesture = (g: Gesture): void => {
     gestureRef.current = { g, id: `g${++gestureCounter}` };
   };
 
-  const onEmptyMouseDown = (e: React.MouseEvent, trackIdx: number): void => {
+  // Places the focused loop or an automation clip at a playlist position.
+  const placeAt = (tick: number, trackIdx: number, bypass: boolean, gesture: string): Clip | null => {
+    if (ui.clipKind === 'loop') {
+      const loop = ui.focusedLoopId !== null ? loopById.get(ui.focusedLoopId) : undefined;
+      if (!loop) return null;
+      return newClipFromLoop(loop, snap(tick, bypass), trackIdx, gesture);
+    }
+    const track = sortedTracks[Math.min(sortedTracks.length - 1, Math.max(0, trackIdx))];
+    if (!track) return null;
+    const clip: AutoClip = {
+      id: state.nextId,
+      trackId: track.id,
+      target: ui.focusedAutoTarget,
+      startTicks: snap(tick, bypass),
+      lengthTicks: PPQ * 16,
+      muted: false,
+      points: [
+        { pos: 0, value: 0.8, tension: 0 },
+        { pos: 1, value: 0.8, tension: 0 },
+      ],
+    };
+    dispatch({ type: 'edit', autoClips: [...project.autoClips, clip], gesture });
+    return null;
+  };
+
+  const onEmptyPointerDown = (e: React.PointerEvent, trackIdx: number): void => {
     if (e.button === 2) return;
     const p = pos(e);
     const bypass = e.altKey;
-    if (ui.tool === 'draw' || ui.tool === 'paint') {
-      if (ui.clipKind === 'loop') {
-        const loop = ui.focusedLoopId !== null ? loopById.get(ui.focusedLoopId) : undefined;
-        if (!loop) return;
-        const id = `g${++gestureCounter}`;
-        if (ui.tool === 'paint') {
-          gestureRef.current = { g: { kind: 'paint', trackId: 0 }, id };
-          const len = loopLengthTicks(loop);
-          newClipFromLoop(loop, Math.floor(p.tick / len) * len, trackIdx, id);
-        } else {
-          const clip = newClipFromLoop(loop, snap(p.tick, bypass), trackIdx, id);
-          if (clip) {
-            const clampedIdx = Math.min(sortedTracks.length - 1, Math.max(0, trackIdx));
-            gestureRef.current = {
-              g: {
-                kind: 'move', ids: [clip.id],
-                startTicks: new Map([[clip.id, clip.startTicks]]),
-                startTrackIdxs: new Map([[clip.id, clampedIdx]]),
-                startTrackIdx: clampedIdx, grabTick: p.tick, auto: false,
-              },
-              id,
-            };
-          }
-        }
-      } else {
-        // automation clip
-        const track = sortedTracks[Math.min(sortedTracks.length - 1, Math.max(0, trackIdx))];
-        if (!track) return;
-        const start = snap(p.tick, bypass);
-        const clip: AutoClip = {
-          id: state.nextId,
-          trackId: track.id,
-          target: ui.focusedAutoTarget,
-          startTicks: start,
-          lengthTicks: PPQ * 16,
-          muted: false,
-          points: [
-            { pos: 0, value: 0.8, tension: 0 },
-            { pos: 1, value: 0.8, tension: 0 },
-          ],
+    if (ui.tool === 'draw') {
+      if (e.pointerType === 'touch') {
+        // defer placement to the tap release so a touch drag can scroll
+        gestureRef.current = {
+          g: { kind: 'tap-place', x0: e.clientX, y0: e.clientY, trackIdx },
+          id: `g${++gestureCounter}`,
         };
-        dispatch({ type: 'edit', autoClips: [...project.autoClips, clip], gesture: `g${++gestureCounter}` });
+        return;
       }
+      const id = `g${++gestureCounter}`;
+      const clip = placeAt(p.tick, trackIdx, bypass, id);
+      if (clip) {
+        const clampedIdx = Math.min(sortedTracks.length - 1, Math.max(0, trackIdx));
+        gestureRef.current = {
+          g: {
+            kind: 'move', ids: [clip.id],
+            startTicks: new Map([[clip.id, clip.startTicks]]),
+            startTrackIdxs: new Map([[clip.id, clampedIdx]]),
+            startTrackIdx: clampedIdx, grabTick: p.tick, auto: false,
+          },
+          id,
+        };
+      }
+    } else if (ui.tool === 'paint') {
+      if (ui.clipKind !== 'loop') {
+        placeAt(p.tick, trackIdx, bypass, `g${++gestureCounter}`);
+        return;
+      }
+      const loop = ui.focusedLoopId !== null ? loopById.get(ui.focusedLoopId) : undefined;
+      if (!loop) return;
+      const id = `g${++gestureCounter}`;
+      gestureRef.current = { g: { kind: 'paint', trackId: 0 }, id };
+      const len = loopLengthTicks(loop);
+      newClipFromLoop(loop, Math.floor(p.tick / len) * len, trackIdx, id);
     } else if (ui.tool === 'select') {
       beginGesture({ kind: 'marquee', x0: p.x, y0: p.y });
       dispatch({ type: 'set-selection', clipIds: [], autoClipIds: [] });
     }
   };
 
-  const onClipMouseDown = (e: React.MouseEvent, clip: Clip): void => {
+  const deleteClip = (clip: Clip): void => {
+    editClips(project.clips.filter(c => c.id !== clip.id), `g${++gestureCounter}`);
+  };
+
+  const removeEnvPoint = (clip: Clip, index: number): void => {
+    const isEndpoint = index === 0 || index === (clip.envelope?.length ?? 0) - 1;
+    editClips(project.clips.map(c => {
+      if (c.id !== clip.id || !c.envelope) return c;
+      if (isEndpoint || c.envelope.length <= 2) return { ...c, envelope: undefined };
+      return { ...c, envelope: c.envelope.filter((_, i) => i !== index) };
+    }), `g${++gestureCounter}`);
+  };
+
+  const onClipPointerDown = (e: React.PointerEvent, clip: Clip): void => {
     e.stopPropagation();
     if (ui.envelopeMode) {
       // envelope editing takes over: click adds a point and drags it
@@ -458,10 +547,8 @@ export const Playlist = ({
       gestureRef.current = { g: { kind: 'env-point', clipId: clip.id, index }, id };
       return;
     }
-    if (e.button === 2) {
-      editClips(project.clips.filter(c => c.id !== clip.id), `g${++gestureCounter}`);
-      return;
-    }
+    if (e.button === 2) return; // deletion handled by the contextmenu event
+    armLongPress(e, () => deleteClip(clip));
     const p = pos(e);
     const rectX = HEADER_W + ticksToRem(clip.startTicks, rpb);
     const w = ticksToRem(clip.lengthTicks, rpb);
@@ -553,12 +640,28 @@ export const Playlist = ({
     }
   };
 
-  const onAutoClipMouseDown = (e: React.MouseEvent, clip: AutoClip, zone: 'label' | 'body'): void => {
+  const deleteAutoClip = (clip: AutoClip): void => {
+    editAuto(project.autoClips.filter(c => c.id !== clip.id), `g${++gestureCounter}`);
+  };
+
+  // Adds an automation point at the event position (Ctrl+click / double-tap).
+  const addAutoPointAt = (e: { clientX: number; clientY: number }, clip: AutoClip, drag: boolean): void => {
+    const p = pos(e);
+    const relPos = Math.min(1, Math.max(0, (p.tick - clip.startTicks) / clip.lengthTicks));
+    const idx = trackIdxById.get(clip.trackId) ?? 0;
+    const laneTop = RULER_H + idx * TRACK_H + CLIP_LABEL_H;
+    const laneH = TRACK_H - CLIP_LABEL_H - 0.25;
+    const value = Math.min(1, Math.max(0, 1 - (p.y - laneTop) / laneH));
+    const pts = [...clip.points, { pos: relPos, value, tension: 0 }].sort((a, b) => a.pos - b.pos);
+    const index = pts.findIndex(pt => pt.pos === relPos && pt.value === value);
+    editAuto(project.autoClips.map(c => (c.id === clip.id ? { ...c, points: pts } : c)), `g${++gestureCounter}`);
+    if (drag) beginGesture({ kind: 'auto-point', clipId: clip.id, index });
+  };
+
+  const onAutoClipPointerDown = (e: React.PointerEvent, clip: AutoClip, zone: 'label' | 'body'): void => {
     e.stopPropagation();
-    if (e.button === 2) {
-      editAuto(project.autoClips.filter(c => c.id !== clip.id), `g${++gestureCounter}`);
-      return;
-    }
+    if (e.button === 2) return; // deletion handled by the contextmenu event
+    armLongPress(e, () => deleteAutoClip(clip));
     const p = pos(e);
     const rectX = HEADER_W + ticksToRem(clip.startTicks, rpb);
     const w = ticksToRem(clip.lengthTicks, rpb);
@@ -589,16 +692,7 @@ export const Playlist = ({
         grabTick: p.tick, auto: true,
       });
     } else if (e.ctrlKey || e.metaKey) {
-      // add a point at the cursor
-      const relPos = Math.min(1, Math.max(0, (p.tick - clip.startTicks) / clip.lengthTicks));
-      const idx = trackIdxById.get(clip.trackId) ?? 0;
-      const laneTop = RULER_H + idx * TRACK_H + CLIP_LABEL_H;
-      const laneH = TRACK_H - CLIP_LABEL_H - 0.25;
-      const value = Math.min(1, Math.max(0, 1 - (p.y - laneTop) / laneH));
-      const pts = [...clip.points, { pos: relPos, value, tension: 0 }].sort((a, b) => a.pos - b.pos);
-      const index = pts.findIndex(pt => pt.pos === relPos && pt.value === value);
-      editAuto(project.autoClips.map(c => (c.id === clip.id ? { ...c, points: pts } : c)), `g${++gestureCounter}`);
-      beginGesture({ kind: 'auto-point', clipId: clip.id, index });
+      addAutoPointAt(e, clip, true);
     }
   };
 
@@ -619,7 +713,7 @@ export const Playlist = ({
           style={{ width: `${contentW}rem`, height: `${RULER_H + sortedTracks.length * TRACK_H + 2.25}rem` }}
         >
           <div className="pl-ruler" style={{ width: `${contentW}rem`, height: `${RULER_H}rem` }}
-            onMouseDown={e => {
+            onPointerDown={e => {
               const p = pos(e);
               onSeek(Math.max(0, snap(p.tick, e.altKey)));
               beginGesture({ kind: 'scrub' });
@@ -640,10 +734,21 @@ export const Playlist = ({
               state={state}
               gridBg={gridBg}
               contentW={contentW}
-              onEmptyMouseDown={onEmptyMouseDown}
-              onClipMouseDown={onClipMouseDown}
-              onAutoClipMouseDown={onAutoClipMouseDown}
-              beginPointGesture={(clipId, index) => beginGesture({ kind: 'auto-point', clipId, index })}
+              onEmptyPointerDown={onEmptyPointerDown}
+              onClipPointerDown={onClipPointerDown}
+              onClipDelete={deleteClip}
+              onAutoClipPointerDown={onAutoClipPointerDown}
+              onAutoClipDelete={deleteAutoClip}
+              onAutoClipAddPoint={addAutoPointAt}
+              beginPointGesture={(e, clipId, index) => {
+                armLongPress(e, () => {
+                  editAuto(project.autoClips.map(c => {
+                    if (c.id !== clipId || c.points.length <= 2) return c;
+                    return { ...c, points: c.points.filter((_, i) => i !== index) };
+                  }), `g${++gestureCounter}`);
+                });
+                beginGesture({ kind: 'auto-point', clipId, index });
+              }}
               beginTensionGesture={(clipId, index, startY, startTension) =>
                 beginGesture({ kind: 'auto-tension', clipId, index, startY, startTension })}
               removePoint={(clipId, index) => {
@@ -653,20 +758,15 @@ export const Playlist = ({
                 }), `g${++gestureCounter}`);
               }}
               onRename={track => setRenaming({ track, name: track.name })}
-              onEnvPointMouseDown={(e, clip, index) => {
+              onEnvPointDown={(e, clip, index) => {
                 e.stopPropagation();
-                if (e.button === 2) {
-                  const isEndpoint = index === 0 || index === (clip.envelope?.length ?? 0) - 1;
-                  editClips(project.clips.map(c => {
-                    if (c.id !== clip.id || !c.envelope) return c;
-                    if (isEndpoint || c.envelope.length <= 2) return { ...c, envelope: undefined };
-                    return { ...c, envelope: c.envelope.filter((_, i) => i !== index) };
-                  }), `g${++gestureCounter}`);
-                } else {
+                if (e.button !== 2) {
+                  armLongPress(e, () => removeEnvPoint(clip, index));
                   beginGesture({ kind: 'env-point', clipId: clip.id, index });
                 }
               }}
-              onEnvTensionMouseDown={(e, clip, index, startTension) => {
+              onEnvPointRemove={removeEnvPoint}
+              onEnvTensionDown={(e, clip, index, startTension) => {
                 e.stopPropagation();
                 if (e.button === 0) {
                   beginGesture({ kind: 'env-tension', clipId: clip.id, index, startY: e.clientY, startTension });
@@ -751,23 +851,28 @@ interface TrackRowProps {
   state: AppState;
   gridBg: React.CSSProperties;
   contentW: number;
-  onEmptyMouseDown: (e: React.MouseEvent, trackIdx: number) => void;
-  onClipMouseDown: (e: React.MouseEvent, clip: Clip) => void;
-  onAutoClipMouseDown: (e: React.MouseEvent, clip: AutoClip, zone: 'label' | 'body') => void;
-  beginPointGesture: (clipId: number, index: number) => void;
+  onEmptyPointerDown: (e: React.PointerEvent, trackIdx: number) => void;
+  onClipPointerDown: (e: React.PointerEvent, clip: Clip) => void;
+  onClipDelete: (clip: Clip) => void;
+  onAutoClipPointerDown: (e: React.PointerEvent, clip: AutoClip, zone: 'label' | 'body') => void;
+  onAutoClipDelete: (clip: AutoClip) => void;
+  onAutoClipAddPoint: (e: { clientX: number; clientY: number }, clip: AutoClip, drag: boolean) => void;
+  beginPointGesture: (e: React.PointerEvent, clipId: number, index: number) => void;
   beginTensionGesture: (clipId: number, index: number, startY: number, startTension: number) => void;
   removePoint: (clipId: number, index: number) => void;
   onRename: (track: Track) => void;
-  onEnvPointMouseDown: (e: React.MouseEvent, clip: Clip, index: number) => void;
-  onEnvTensionMouseDown: (e: React.MouseEvent, clip: Clip, index: number, startTension: number) => void;
+  onEnvPointDown: (e: React.PointerEvent, clip: Clip, index: number) => void;
+  onEnvPointRemove: (clip: Clip, index: number) => void;
+  onEnvTensionDown: (e: React.PointerEvent, clip: Clip, index: number, startTension: number) => void;
   dispatch: (a: Action) => void;
   engine: AudioEngine;
 }
 
 const TrackRow = ({
-  track, state, gridBg, contentW, onEmptyMouseDown, onClipMouseDown, onAutoClipMouseDown,
+  track, state, gridBg, contentW, onEmptyPointerDown, onClipPointerDown, onClipDelete,
+  onAutoClipPointerDown, onAutoClipDelete, onAutoClipAddPoint,
   beginPointGesture, beginTensionGesture, removePoint, onRename,
-  onEnvPointMouseDown, onEnvTensionMouseDown, dispatch, engine,
+  onEnvPointDown, onEnvPointRemove, onEnvTensionDown, dispatch, engine,
 }: TrackRowProps): React.ReactElement => {
   const { project, ui } = state;
   const rpb = ui.remPerBeat;
@@ -779,9 +884,9 @@ const TrackRow = ({
     <div
       className="pl-row"
       style={{ height: `${TRACK_H}rem`, width: `${contentW}rem`, ...gridBg }}
-      onMouseDown={e => onEmptyMouseDown(e, track.idx)}
+      onPointerDown={e => onEmptyPointerDown(e, track.idx)}
     >
-      <div className="pl-head" style={{ width: `${HEADER_W}rem` }} onMouseDown={e => e.stopPropagation()}>
+      <div className="pl-head" style={{ width: `${HEADER_W}rem` }} onPointerDown={e => e.stopPropagation()}>
         <div className="pl-head-top">
           <label className="pl-head-swatch" style={{ background: track.color }} title="track color — click to change">
             <input
@@ -830,9 +935,11 @@ const TrackRow = ({
             selected={ui.selection.includes(clip.id)}
             envelopeMode={ui.envelopeMode}
             engine={engine}
-            onMouseDown={e => onClipMouseDown(e, clip)}
-            onEnvPointMouseDown={(e, index) => onEnvPointMouseDown(e, clip, index)}
-            onEnvTensionMouseDown={(e, index, t) => onEnvTensionMouseDown(e, clip, index, t)}
+            onPointerDown={e => onClipPointerDown(e, clip)}
+            onDelete={() => onClipDelete(clip)}
+            onEnvPointDown={(e, index) => onEnvPointDown(e, clip, index)}
+            onEnvPointRemove={index => onEnvPointRemove(clip, index)}
+            onEnvTensionDown={(e, index, t) => onEnvTensionDown(e, clip, index, t)}
           />
         );
       })}
@@ -843,7 +950,9 @@ const TrackRow = ({
           clip={clip}
           rpb={rpb}
           selected={ui.autoSelection.includes(clip.id)}
-          onMouseDown={(e, zone) => onAutoClipMouseDown(e, clip, zone)}
+          onPointerDown={(e, zone) => onAutoClipPointerDown(e, clip, zone)}
+          onDelete={() => onAutoClipDelete(clip)}
+          onAddPoint={e => onAutoClipAddPoint(e, clip, false)}
           beginPointGesture={beginPointGesture}
           beginTensionGesture={beginTensionGesture}
           removePoint={removePoint}
@@ -854,15 +963,17 @@ const TrackRow = ({
 };
 
 const ClipView = ({
-  clip, loop, color, rpb, selected, envelopeMode, engine, onMouseDown,
-  onEnvPointMouseDown, onEnvTensionMouseDown,
+  clip, loop, color, rpb, selected, envelopeMode, engine, onPointerDown, onDelete,
+  onEnvPointDown, onEnvPointRemove, onEnvTensionDown,
 }: {
   clip: Clip; loop: Loop; color: string; rpb: number; selected: boolean;
   envelopeMode: boolean;
   engine: AudioEngine;
-  onMouseDown: (e: React.MouseEvent) => void;
-  onEnvPointMouseDown: (e: React.MouseEvent, index: number) => void;
-  onEnvTensionMouseDown: (e: React.MouseEvent, index: number, startTension: number) => void;
+  onPointerDown: (e: React.PointerEvent) => void;
+  onDelete: () => void;
+  onEnvPointDown: (e: React.PointerEvent, index: number) => void;
+  onEnvPointRemove: (index: number) => void;
+  onEnvTensionDown: (e: React.PointerEvent, index: number, startTension: number) => void;
 }): React.ReactElement => {
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const [, bump] = React.useReducer((x: number) => x + 1, 0);
@@ -931,7 +1042,13 @@ const ClipView = ({
         height: `${hRem}rem`,
         background: color,
       }}
-      onMouseDown={onMouseDown}
+      onPointerDown={onPointerDown}
+      onContextMenu={e => {
+        // right-click and touch long-press both land here
+        e.preventDefault();
+        e.stopPropagation();
+        if (!envelopeMode) onDelete();
+      }}
     >
       <div className="pl-clip-label">
         {loop.name}
@@ -951,9 +1068,14 @@ const ClipView = ({
             return (
               <circle
                 key={i}
-                cx={x} cy={y} r="0.22"
+                cx={x} cy={y} r={POINT_R}
                 className="pl-env-point"
-                onMouseDown={e => onEnvPointMouseDown(e, i)}
+                onPointerDown={e => onEnvPointDown(e, i)}
+                onContextMenu={e => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onEnvPointRemove(i);
+                }}
               />
             );
           })}
@@ -964,9 +1086,9 @@ const ClipView = ({
             return (
               <rect
                 key={`t${i}`}
-                x={x - 0.16} y={y - 0.16} width="0.32" height="0.32"
+                x={x - HANDLE_R} y={y - HANDLE_R} width={HANDLE_R * 2} height={HANDLE_R * 2}
                 className="pl-env-tension"
-                onMouseDown={e => onEnvTensionMouseDown(e, i, pt.tension)}
+                onPointerDown={e => onEnvTensionDown(e, i, pt.tension)}
               />
             );
           })}
@@ -978,10 +1100,15 @@ const ClipView = ({
 
 const AUTO_COLOR = '#d98d3a';
 
-const AutoClipView = ({ clip, rpb, selected, onMouseDown, beginPointGesture, beginTensionGesture, removePoint }: {
+const AutoClipView = ({
+  clip, rpb, selected, onPointerDown, onDelete, onAddPoint,
+  beginPointGesture, beginTensionGesture, removePoint,
+}: {
   clip: AutoClip; rpb: number; selected: boolean;
-  onMouseDown: (e: React.MouseEvent, zone: 'label' | 'body') => void;
-  beginPointGesture: (clipId: number, index: number) => void;
+  onPointerDown: (e: React.PointerEvent, zone: 'label' | 'body') => void;
+  onDelete: () => void;
+  onAddPoint: (e: { clientX: number; clientY: number }) => void;
+  beginPointGesture: (e: React.PointerEvent, clipId: number, index: number) => void;
   beginTensionGesture: (clipId: number, index: number, startY: number, startTension: number) => void;
   removePoint: (clipId: number, index: number) => void;
 }): React.ReactElement => {
@@ -1008,9 +1135,19 @@ const AutoClipView = ({ clip, rpb, selected, onMouseDown, beginPointGesture, beg
     <div
       className={`pl-auto${selected ? ' selected' : ''}${clip.muted ? ' muted' : ''}`}
       style={{ left: `${HEADER_W + ticksToRem(clip.startTicks, rpb)}rem`, width: `${wRem}rem`, height: `${hRem}rem` }}
-      onMouseDown={e => onMouseDown(e, 'body')}
+      onPointerDown={e => onPointerDown(e, 'body')}
+      onDoubleClick={e => {
+        // double-click / double-tap adds a point (touch-friendly Ctrl+click)
+        e.stopPropagation();
+        onAddPoint(e);
+      }}
+      onContextMenu={e => {
+        e.preventDefault();
+        e.stopPropagation();
+        onDelete();
+      }}
     >
-      <div className="pl-clip-label" onMouseDown={e => onMouseDown(e, 'label')}>
+      <div className="pl-clip-label" onPointerDown={e => onPointerDown(e, 'label')}>
         {targetLabel}
       </div>
       <svg viewBox={`0 0 ${wRem} ${hRem}`} preserveAspectRatio="none" className="pl-auto-svg">
@@ -1021,15 +1158,16 @@ const AutoClipView = ({ clip, rpb, selected, onMouseDown, beginPointGesture, beg
           return (
             <circle
               key={i}
-              cx={x} cy={y} r="0.22"
+              cx={x} cy={y} r={POINT_R}
               className="pl-auto-point"
-              onMouseDown={e => {
+              onPointerDown={e => {
                 e.stopPropagation();
-                if (e.button === 2) {
-                  removePoint(clip.id, i);
-                } else {
-                  beginPointGesture(clip.id, i);
-                }
+                if (e.button !== 2) beginPointGesture(e, clip.id, i);
+              }}
+              onContextMenu={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                removePoint(clip.id, i);
               }}
             />
           );
@@ -1041,9 +1179,9 @@ const AutoClipView = ({ clip, rpb, selected, onMouseDown, beginPointGesture, beg
           return (
             <rect
               key={`t${i}`}
-              x={x - 0.16} y={y - 0.16} width="0.32" height="0.32"
+              x={x - HANDLE_R} y={y - HANDLE_R} width={HANDLE_R * 2} height={HANDLE_R * 2}
               className="pl-auto-tension"
-              onMouseDown={e => {
+              onPointerDown={e => {
                 e.stopPropagation();
                 if (e.button === 0) beginTensionGesture(clip.id, i, e.clientY, pt.tension);
               }}

@@ -78,7 +78,7 @@ export const TrimDialog = ({
   };
 
   React.useEffect(() => {
-    const onMove = (e: MouseEvent): void => {
+    const onMove = (e: PointerEvent): void => {
       if (!dragRef.current) return;
       const p = posFromEvent(e);
       setRange(([s, en]) => dragRef.current === 'start'
@@ -86,11 +86,13 @@ export const TrimDialog = ({
         : [s, Math.max(p, s + 0.05)]);
     };
     const onUp = (): void => { dragRef.current = null; };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
     return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
     };
   }, [buffer]);
 
@@ -127,13 +129,13 @@ export const TrimDialog = ({
             className="trim-handle"
             style={{ left: `${(range[0] / buffer.duration) * 100}%` }}
             title="drag to trim the start"
-            onMouseDown={e => { e.preventDefault(); dragRef.current = 'start'; }}
+            onPointerDown={e => { e.preventDefault(); dragRef.current = 'start'; }}
           />
           <div
             className="trim-handle end"
             style={{ left: `${(range[1] / buffer.duration) * 100}%` }}
             title="drag to trim the end"
-            onMouseDown={e => { e.preventDefault(); dragRef.current = 'end'; }}
+            onPointerDown={e => { e.preventDefault(); dragRef.current = 'end'; }}
           />
         </div>
 

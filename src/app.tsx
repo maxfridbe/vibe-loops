@@ -37,6 +37,8 @@ export const App = (): React.ReactElement => {
 
   const [playheadTicks, setPlayheadTicks] = React.useState(0);
   const [dragLoop, setDragLoop] = React.useState<LoopDrag | null>(null);
+  // touch drags from the browser arm only after a horizontal move
+  const dragPendingRef = React.useRef<LoopDrag | null>(null);
   const [uiScale, setUiScale] = React.useState(loadUiScale);
   const [auditioningLoopId, setAuditioningLoopId] = React.useState<number | null>(null);
   const [importState, setImportState] = React.useState<ImportState | null>(null);
@@ -157,11 +159,37 @@ export const App = (): React.ReactElement => {
   // --- ghost for browser drag ----------------------------------------------
   React.useEffect(() => {
     if (!dragLoop) return;
-    const onMove = (e: MouseEvent): void =>
+    const onMove = (e: PointerEvent): void =>
       setDragLoop(d => (d ? { ...d, x: e.clientX, y: e.clientY } : d));
-    window.addEventListener('mousemove', onMove);
-    return () => window.removeEventListener('mousemove', onMove);
+    window.addEventListener('pointermove', onMove);
+    return () => window.removeEventListener('pointermove', onMove);
   }, [dragLoop !== null]);
+
+  // pending (touch) drags: promote to a real drag on horizontal movement,
+  // give up if the gesture turns into a vertical list scroll
+  React.useEffect(() => {
+    const onMove = (e: PointerEvent): void => {
+      const p = dragPendingRef.current;
+      if (!p) return;
+      const dx = e.clientX - p.x;
+      const dy = e.clientY - p.y;
+      if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy)) {
+        dragPendingRef.current = null;
+        setDragLoop({ loopId: p.loopId, x: e.clientX, y: e.clientY });
+      } else if (Math.abs(dy) > 18 && Math.abs(dy) > Math.abs(dx)) {
+        dragPendingRef.current = null;
+      }
+    };
+    const onEnd = (): void => { dragPendingRef.current = null; };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onEnd);
+    window.addEventListener('pointercancel', onEnd);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onEnd);
+      window.removeEventListener('pointercancel', onEnd);
+    };
+  }, []);
 
   // --- project I/O ----------------------------------------------------------
   const onNew = (): void => {
@@ -307,7 +335,13 @@ export const App = (): React.ReactElement => {
           engine={engine}
           onFocusLoop={id => dispatch({ type: 'focus-loop', loopId: id })}
           onToggleAudition={onToggleAudition}
-          onBeginDrag={(loopId, x, y) => setDragLoop({ loopId, x, y })}
+          onBeginDrag={(loopId, x, y, deferred) => {
+            if (deferred) {
+              dragPendingRef.current = { loopId, x, y };
+            } else {
+              setDragLoop({ loopId, x, y });
+            }
+          }}
           onRequestRename={loop => setRenamingLoop({ loop, name: loop.name })}
         />
         <Playlist

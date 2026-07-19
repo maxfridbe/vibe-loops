@@ -18,7 +18,9 @@ interface BrowserProps {
   engine: AudioEngine;
   onFocusLoop: (loopId: number) => void;
   onToggleAudition: (loop: Loop) => void;
-  onBeginDrag: (loopId: number, x: number, y: number) => void;
+  // deferred = touch: the drag only arms after a horizontal move, so a
+  // vertical swipe still scrolls the list
+  onBeginDrag: (loopId: number, x: number, y: number, deferred: boolean) => void;
   onRequestRename: (loop: Loop) => void;
 }
 
@@ -72,17 +74,17 @@ export const Browser = ({
                   key={loop.id}
                   className={`browser-row${loop.id === focusedLoopId ? ' focused' : ''}`}
                   title={`${loop.name} — ${loop.bpm.toFixed(0)} BPM, ${loop.beats} beats, ${fmtDur(loop)}${loop.keySig ? `, ${loop.keySig}` : ''}${loop.license ? ` (${loop.license})` : ''}. Click to focus, drag onto the playlist to place, double-click to rename.`}
-                  onMouseDown={e => {
+                  onPointerDown={e => {
                     if (e.button !== 0) return;
                     onFocusLoop(loop.id);
-                    onBeginDrag(loop.id, e.clientX, e.clientY);
+                    onBeginDrag(loop.id, e.clientX, e.clientY, e.pointerType === 'touch');
                   }}
                   onDoubleClick={() => onRequestRename(loop)}
                 >
                   <button
                     className={`browser-row-play${playing ? ' playing' : ''}`}
                     title={playing ? 'stop preview' : 'preview loop'}
-                    onMouseDown={e => e.stopPropagation()}
+                    onPointerDown={e => e.stopPropagation()}
                     onClick={e => {
                       e.stopPropagation();
                       onToggleAudition(loop);

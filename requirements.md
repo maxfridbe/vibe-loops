@@ -69,7 +69,8 @@ Status: ✅ implemented · 🚧 planned
 | REQ-WFE-0035 | Stretch tool (S): dragging a clip's beginning or end time-stretches the audio in place (per-clip ratio 0.25×–4×, pitch preserved); the clip label shows the ratio and the slip offset scales with it. | ✅ |
 | REQ-WFE-0036 | Library loops (including imported and recorded ones) can be renamed via double-click on the browser row, using the in-app rename modal. | ✅ |
 | REQ-WFE-0037 | Track volume and pan sliders are visually distinct: volume is an accent-colored ramp with a round thumb; pan has a center-notched track with a square warm-colored thumb. Both tooltips report the current value. | ✅ |
-| REQ-WFE-0038 | Pressing `?` (or the ribbon help button) opens a reference dialog listing every keyboard shortcut and mouse interaction with descriptions; Esc closes it. | ✅ |
+| REQ-WFE-0038 | Pressing `?` (or the ribbon help button) opens a reference dialog listing every keyboard, mouse, and touch interaction with descriptions; Esc closes it. | ✅ |
+| REQ-WFE-0039 | The app works on touchscreen tablets: all gestures use Pointer Events; clips/points/ruler/trim handles own their touches (`touch-action: none`) while lanes and the browser stay scrollable; with the draw tool a tap places a clip and a drag scrolls; long-press deletes (clips, automation clips, points); double-tap adds automation points; browser loops drag out on horizontal pull and scroll on vertical swipe; coarse pointers get larger edge/point targets; preview buttons stay visible without hover; app chrome suppresses double-tap zoom. | ✅ |
 
 ## Audio engine
 

@@ -218,6 +218,8 @@ html, body {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  /* no double-tap-to-zoom delays on app chrome; panning still allowed */
+  touch-action: manipulation;
 }
 
 .app-loading {
@@ -881,6 +883,25 @@ html, body {
   background: rgba(91, 141, 217, 0.15);
   z-index: 8;
   pointer-events: none;
+}
+
+/* --------------------------------------------------- touch-action policy */
+/* Clips, points, the ruler and trim handles own their touch gestures.
+   Empty lanes stay pannable under the draw tool (tap places, drag scrolls);
+   paint/select/slice need the drag, so lanes lock while those are active.
+   Browser rows pan vertically; a horizontal pull starts a loop drag. */
+
+.pl-clip, .pl-auto, .pl-ruler, .trim-handle,
+.pl-env-point, .pl-env-tension, .pl-auto-point, .pl-auto-tension {
+  touch-action: none;
+}
+.playlist[data-tool='paint'] .pl-row,
+.playlist[data-tool='select'] .pl-row { touch-action: none; }
+.browser-row { touch-action: pan-y; }
+
+/* no hover on touch: keep preview buttons visible */
+@media (hover: none) {
+  .browser-row-play { visibility: visible; }
 }
 
 /* ------------------------------------------------- per-tool cursor states */

@@ -63,6 +63,11 @@ All implemented functionality is tracked with requirement IDs in
 | Undo / redo | Ctrl+Z / Ctrl+Shift+Z |
 | Shortcut reference | ? (or the ribbon help button) |
 
+Touchscreen tablets are fully supported: tap places clips (draw tool),
+dragging clips/edges/points works with a finger, long-press deletes,
+double-tap adds automation points, and the playlist/browser still scroll
+naturally (empty-lane drags pan, browser loops drag out on a sideways pull).
+
 ## Architecture
 
 No Node/npm dependency chain. The repository contains everything needed to

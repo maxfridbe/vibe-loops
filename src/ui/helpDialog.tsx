@@ -41,6 +41,14 @@ const MOUSE: Array<[string, string]> = [
   ['track header: click the color swatch', 'change the track color'],
 ];
 
+const TOUCH: Array<[string, string]> = [
+  ['tap an empty lane (Draw)', 'place the focused clip (drag scrolls instead)'],
+  ['drag a clip / its edges', 'move, resize or stretch — same as with a mouse'],
+  ['long-press a clip or point', 'delete / remove it (same as right-click)'],
+  ['double-tap an automation clip', 'add an automation point'],
+  ['browser: pull a loop sideways', 'drag it to the playlist; swipe up/down to scroll the list'],
+];
+
 export const HelpDialog = ({ onClose }: HelpDialogProps): React.ReactElement => (
   <div className="vl-modal-backdrop" onMouseDown={onClose}>
     <div className="vl-modal vl-modal-wide vl-help" onMouseDown={e => e.stopPropagation()}>
@@ -61,6 +69,14 @@ export const HelpDialog = ({ onClose }: HelpDialogProps): React.ReactElement => 
           <table className="vl-help-table">
             <tbody>
               {MOUSE.map(([k, d]) => (
+                <tr key={k}><td className="vl-help-action">{k}</td><td>{d}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="vl-help-heading" style={{ marginTop: '1em' }}>touch</div>
+          <table className="vl-help-table">
+            <tbody>
+              {TOUCH.map(([k, d]) => (
                 <tr key={k}><td className="vl-help-action">{k}</td><td>{d}</td></tr>
               ))}
             </tbody>
