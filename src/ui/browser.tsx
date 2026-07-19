@@ -1,9 +1,9 @@
 // Left-hand asset browser: the loop library grouped by category, with
-// click-to-audition and drag-onto-playlist.
+// hover play/stop preview and drag-onto-playlist.
 
 import { AudioEngine } from '../engine/audio';
 import { Loop } from '../types';
-import { MusicIcon } from './icons';
+import { MusicIcon, PlayIcon, StopIcon } from './icons';
 
 export interface LoopDrag {
   loopId: number;
@@ -14,8 +14,10 @@ export interface LoopDrag {
 interface BrowserProps {
   loops: Loop[];
   focusedLoopId: number | null;
+  auditioningLoopId: number | null;
   engine: AudioEngine;
   onFocusLoop: (loopId: number) => void;
+  onToggleAudition: (loop: Loop) => void;
   onBeginDrag: (loopId: number, x: number, y: number) => void;
 }
 
@@ -24,7 +26,9 @@ const fmtDur = (loop: Loop): string => {
   return `${s.toFixed(1)}s`;
 };
 
-export const Browser = ({ loops, focusedLoopId, engine, onFocusLoop, onBeginDrag }: BrowserProps): React.ReactElement => {
+export const Browser = ({
+  loops, focusedLoopId, auditioningLoopId, onFocusLoop, onToggleAudition, onBeginDrag,
+}: BrowserProps): React.ReactElement => {
   const [filter, setFilter] = React.useState('');
   const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({});
 
@@ -60,23 +64,36 @@ export const Browser = ({ loops, focusedLoopId, engine, onFocusLoop, onBeginDrag
               {cat || 'uncategorized'}
               <span className="browser-cat-count">{byCategory.get(cat)!.length}</span>
             </div>
-            {!collapsed[cat] && byCategory.get(cat)!.map(loop => (
-              <div
-                key={loop.id}
-                className={`browser-row${loop.id === focusedLoopId ? ' focused' : ''}`}
-                title={`${loop.name} — ${loop.bpm.toFixed(0)} BPM, ${loop.beats} beats, ${fmtDur(loop)}${loop.keySig ? `, ${loop.keySig}` : ''} (${loop.license})`}
-                onMouseDown={e => {
-                  if (e.button !== 0) return;
-                  onFocusLoop(loop.id);
-                  void engine.audition(loop);
-                  onBeginDrag(loop.id, e.clientX, e.clientY);
-                }}
-              >
-                <span className="browser-row-name">{loop.name}</span>
-                {loop.keySig && <span className="browser-row-key">{loop.keySig}</span>}
-                <span className="browser-row-bpm">{loop.bpm.toFixed(0)}</span>
-              </div>
-            ))}
+            {!collapsed[cat] && byCategory.get(cat)!.map(loop => {
+              const playing = loop.id === auditioningLoopId;
+              return (
+                <div
+                  key={loop.id}
+                  className={`browser-row${loop.id === focusedLoopId ? ' focused' : ''}`}
+                  title={`${loop.name} — ${loop.bpm.toFixed(0)} BPM, ${loop.beats} beats, ${fmtDur(loop)}${loop.keySig ? `, ${loop.keySig}` : ''} (${loop.license}). Click to focus, drag onto the playlist to place.`}
+                  onMouseDown={e => {
+                    if (e.button !== 0) return;
+                    onFocusLoop(loop.id);
+                    onBeginDrag(loop.id, e.clientX, e.clientY);
+                  }}
+                >
+                  <button
+                    className={`browser-row-play${playing ? ' playing' : ''}`}
+                    title={playing ? 'stop preview' : 'preview loop'}
+                    onMouseDown={e => e.stopPropagation()}
+                    onClick={e => {
+                      e.stopPropagation();
+                      onToggleAudition(loop);
+                    }}
+                  >
+                    {playing ? <StopIcon size={11} /> : <PlayIcon size={11} />}
+                  </button>
+                  <span className="browser-row-name">{loop.name}</span>
+                  {loop.keySig && <span className="browser-row-key">{loop.keySig}</span>}
+                  <span className="browser-row-bpm">{loop.bpm.toFixed(0)}</span>
+                </div>
+              );
+            })}
           </div>
         ))}
         {categories.length === 0 && <div className="browser-empty">no loops match</div>}

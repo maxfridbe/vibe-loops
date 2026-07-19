@@ -47,3 +47,22 @@ export const applyTheme = (id: string): void => {
   document.documentElement.dataset.theme = id;
   try { localStorage.setItem(STORAGE_KEY, id); } catch { /* storage unavailable */ }
 };
+
+// --- interface scale --------------------------------------------------------
+// The whole UI is rem-based, so scaling the root font size scales everything.
+
+export const UI_SCALES = [80, 90, 100, 110, 125, 150];
+const SCALE_KEY = 'vibe-loops.ui-scale';
+
+export const loadUiScale = (): number => {
+  try {
+    const v = Number(localStorage.getItem(SCALE_KEY));
+    if (UI_SCALES.includes(v)) return v;
+  } catch { /* storage unavailable */ }
+  return 100;
+};
+
+export const applyUiScale = (pct: number): void => {
+  document.documentElement.style.fontSize = `${pct}%`;
+  try { localStorage.setItem(SCALE_KEY, String(pct)); } catch { /* storage unavailable */ }
+};

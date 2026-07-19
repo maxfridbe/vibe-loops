@@ -1,6 +1,6 @@
 import { DEFAULT_THEME } from './themes';
 import {
-  Arrangement, AutoClip, AutoTarget, Clip, ClipKind, Project, SNAP_CHOICES, Tool, Track,
+  Arrangement, AutoClip, AutoTarget, Clip, ClipKind, Loop, Project, SNAP_CHOICES, Tool, Track,
 } from './types';
 
 export interface UIState {
@@ -57,7 +57,8 @@ export type Action =
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'set-status'; status: string }
-  | { type: 'set-theme'; theme: string };
+  | { type: 'set-theme'; theme: string }
+  | { type: 'add-loop'; loop: Loop };
 
 const snapshot = (p: Project): HistoryEntry => ({
   bpm: p.bpm,
@@ -198,5 +199,13 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, status: action.status };
     case 'set-theme':
       return { ...state, ui: { ...state.ui, theme: action.theme } };
+    case 'add-loop':
+      return {
+        ...state,
+        project: { ...state.project, loops: [...state.project.loops, action.loop] },
+        nextId: Math.max(state.nextId, action.loop.id + 1),
+        ui: { ...state.ui, focusedLoopId: action.loop.id, clipKind: 'loop' },
+        status: `added "${action.loop.name}" to the library`,
+      };
   }
 }

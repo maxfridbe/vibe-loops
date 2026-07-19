@@ -36,7 +36,11 @@ interface PlaylistProps {
 }
 
 type Gesture =
-  | { kind: 'move'; ids: number[]; startTicks: Map<number, number>; startTrackIdx: number; grabTick: number; auto: boolean }
+  | {
+      kind: 'move'; ids: number[]; startTicks: Map<number, number>;
+      startTrackIdxs: Map<number, number>; // track idx of each clip at gesture start
+      startTrackIdx: number; grabTick: number; auto: boolean;
+    }
   | { kind: 'resize-r'; id: number; auto: boolean }
   | { kind: 'resize-l'; id: number; auto: boolean }
   | { kind: 'slip'; id: number; grabTick: number; startOffset: number }
@@ -58,6 +62,7 @@ export const Playlist = ({
   const gestureRef = React.useRef<{ g: Gesture; id: string } | null>(null);
   // marquee kept in rem coordinates
   const [marquee, setMarquee] = React.useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const [renaming, setRenaming] = React.useState<{ track: Track; name: string } | null>(null);
 
   let endBeats = 64;
   for (const c of project.clips) endBeats = Math.max(endBeats, (c.startTicks + c.lengthTicks) / PPQ);
@@ -125,9 +130,12 @@ export const Playlist = ({
             sortedTracks.length - 1,
             Math.max(0, p.trackIdx),
           ) - g.startTrackIdx;
+          // deltas are always applied to the gesture-start position, never the
+          // current one, so movement cannot compound across mousemove events
           const moveOne = <T extends Clip | AutoClip>(c: T): T => {
             const base = g.startTicks.get(c.id)!;
-            const idx = Math.min(sortedTracks.length - 1, Math.max(0, (trackIdxById.get(c.trackId) ?? 0) + trackDelta));
+            const baseIdx = g.startTrackIdxs.get(c.id) ?? 0;
+            const idx = Math.min(sortedTracks.length - 1, Math.max(0, baseIdx + trackDelta));
             return { ...c, startTicks: Math.max(0, base + delta), trackId: sortedTracks[idx].id };
           };
           if (g.auto) {
@@ -319,11 +327,13 @@ export const Playlist = ({
         } else {
           const clip = newClipFromLoop(loop, snap(p.tick, bypass), trackIdx, id);
           if (clip) {
+            const clampedIdx = Math.min(sortedTracks.length - 1, Math.max(0, trackIdx));
             gestureRef.current = {
               g: {
                 kind: 'move', ids: [clip.id],
                 startTicks: new Map([[clip.id, clip.startTicks]]),
-                startTrackIdx: trackIdx, grabTick: p.tick, auto: false,
+                startTrackIdxs: new Map([[clip.id, clampedIdx]]),
+                startTrackIdx: clampedIdx, grabTick: p.tick, auto: false,
               },
               id,
             };
@@ -391,9 +401,11 @@ export const Playlist = ({
           : (already ? ui.selection : [clip.id]);
         dispatch({ type: 'set-selection', clipIds, autoClipIds: e.shiftKey ? ui.autoSelection : [] });
         const ids = clipIds.includes(clip.id) ? clipIds : [clip.id];
+        const members = project.clips.filter(c => ids.includes(c.id));
         beginGesture({
           kind: 'move', ids,
-          startTicks: new Map(project.clips.filter(c => ids.includes(c.id)).map(c => [c.id, c.startTicks])),
+          startTicks: new Map(members.map(c => [c.id, c.startTicks])),
+          startTrackIdxs: new Map(members.map(c => [c.id, trackIdxById.get(c.trackId) ?? 0])),
           startTrackIdx: trackIdxById.get(clip.trackId) ?? 0,
           grabTick: p.tick, auto: false,
         });
@@ -408,9 +420,11 @@ export const Playlist = ({
           beginGesture({ kind: 'resize-l', id: clip.id, auto: false });
         } else {
           const ids = ui.selection.includes(clip.id) ? ui.selection : [clip.id];
+          const members = project.clips.filter(c => ids.includes(c.id));
           beginGesture({
             kind: 'move', ids,
-            startTicks: new Map(project.clips.filter(c => ids.includes(c.id)).map(c => [c.id, c.startTicks])),
+            startTicks: new Map(members.map(c => [c.id, c.startTicks])),
+            startTrackIdxs: new Map(members.map(c => [c.id, trackIdxById.get(c.trackId) ?? 0])),
             startTrackIdx: trackIdxById.get(clip.trackId) ?? 0,
             grabTick: p.tick, auto: false,
           });
@@ -450,6 +464,7 @@ export const Playlist = ({
       beginGesture({
         kind: 'move', ids: [clip.id],
         startTicks: new Map([[clip.id, clip.startTicks]]),
+        startTrackIdxs: new Map([[clip.id, trackIdxById.get(clip.trackId) ?? 0]]),
         startTrackIdx: trackIdxById.get(clip.trackId) ?? 0,
         grabTick: p.tick, auto: true,
       });
@@ -476,7 +491,7 @@ export const Playlist = ({
   };
 
   return (
-    <div className="playlist" onContextMenu={e => e.preventDefault()}>
+    <div className="playlist" data-tool={ui.tool} onContextMenu={e => e.preventDefault()}>
       <div className="pl-scroll">
         <div
           className="pl-content"
@@ -517,6 +532,7 @@ export const Playlist = ({
                   return { ...c, points: c.points.filter((_, i) => i !== index) };
                 }), `g${++gestureCounter}`);
               }}
+              onRename={track => setRenaming({ track, name: track.name })}
               dispatch={dispatch}
               engine={engine}
             />
@@ -552,6 +568,39 @@ export const Playlist = ({
           )}
         </div>
       </div>
+
+      {renaming && (
+        <div className="vl-modal-backdrop" onMouseDown={() => setRenaming(null)}>
+          <div className="vl-modal" onMouseDown={e => e.stopPropagation()}>
+            <div className="vl-modal-title">Rename track</div>
+            <input
+              className="vl-modal-input"
+              autoFocus
+              value={renaming.name}
+              onChange={e => setRenaming({ ...renaming, name: e.target.value })}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && renaming.name.trim()) {
+                  dispatch({ type: 'update-track', track: { ...renaming.track, name: renaming.name.trim() } });
+                  setRenaming(null);
+                } else if (e.key === 'Escape') {
+                  setRenaming(null);
+                }
+              }}
+            />
+            <div className="vl-modal-buttons">
+              <button onClick={() => setRenaming(null)}>cancel</button>
+              <button
+                className="primary"
+                disabled={!renaming.name.trim()}
+                onClick={() => {
+                  dispatch({ type: 'update-track', track: { ...renaming.track, name: renaming.name.trim() } });
+                  setRenaming(null);
+                }}
+              >rename</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -569,13 +618,14 @@ interface TrackRowProps {
   beginPointGesture: (clipId: number, index: number) => void;
   beginTensionGesture: (clipId: number, index: number, startY: number, startTension: number) => void;
   removePoint: (clipId: number, index: number) => void;
+  onRename: (track: Track) => void;
   dispatch: (a: Action) => void;
   engine: AudioEngine;
 }
 
 const TrackRow = ({
   track, state, gridBg, contentW, onEmptyMouseDown, onClipMouseDown, onAutoClipMouseDown,
-  beginPointGesture, beginTensionGesture, removePoint, dispatch, engine,
+  beginPointGesture, beginTensionGesture, removePoint, onRename, dispatch, engine,
 }: TrackRowProps): React.ReactElement => {
   const { project, ui } = state;
   const rpb = ui.remPerBeat;
@@ -591,14 +641,17 @@ const TrackRow = ({
     >
       <div className="pl-head" style={{ width: `${HEADER_W}rem` }} onMouseDown={e => e.stopPropagation()}>
         <div className="pl-head-top">
-          <span className="pl-head-swatch" style={{ background: track.color }} />
+          <label className="pl-head-swatch" style={{ background: track.color }} title="track color — click to change">
+            <input
+              type="color"
+              value={track.color}
+              onChange={e => dispatch({ type: 'update-track', track: { ...track, color: e.target.value } })}
+            />
+          </label>
           <span
             className="pl-head-name"
             title="double-click to rename"
-            onDoubleClick={() => {
-              const name = prompt('track name', track.name);
-              if (name) dispatch({ type: 'update-track', track: { ...track, name } });
-            }}
+            onDoubleClick={() => onRename(track)}
           >{track.name}</span>
           <button
             className={`pl-head-mute${track.muted ? ' on' : ''}`}

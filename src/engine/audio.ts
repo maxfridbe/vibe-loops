@@ -16,11 +16,13 @@ export class AudioEngine {
   private liveNodes: AudioNode[] = [];
   private liveSources: AudioBufferSourceNode[] = [];
   private auditionSource: AudioBufferSourceNode | null = null;
+  private auditionLoopId: number | null = null;
   private startedAtCtxTime = 0;
   private startTicks = 0;
   private playingBpm = 120;
   private endTimer: number | null = null;
   onEnded: (() => void) | null = null;
+  onAuditionChange: ((loopId: number | null) => void) | null = null;
 
   context(): AudioContext {
     if (!this.ctx) this.ctx = new AudioContext();
@@ -100,26 +102,40 @@ export class AudioEngine {
     return result;
   }
 
-  async audition(loop: Loop): Promise<void> {
+  // Plays a loop once on the preview path. `volume` should already include
+  // the project master volume so previews respect it.
+  async audition(loop: Loop, volume = 0.9): Promise<void> {
     const ctx = this.context();
     this.stopAudition();
     const buf = await this.ensureDecoded(loop);
     const src = ctx.createBufferSource();
     src.buffer = buf;
     const g = ctx.createGain();
-    g.gain.value = 0.9;
+    g.gain.value = volume;
     src.connect(g).connect(ctx.destination);
     src.start();
     this.auditionSource = src;
+    this.auditionLoopId = loop.id;
+    this.onAuditionChange?.(loop.id);
     src.onended = () => {
-      if (this.auditionSource === src) this.auditionSource = null;
+      if (this.auditionSource === src) {
+        this.auditionSource = null;
+        this.auditionLoopId = null;
+        this.onAuditionChange?.(null);
+      }
     };
+  }
+
+  currentAuditionLoopId(): number | null {
+    return this.auditionLoopId;
   }
 
   stopAudition(): void {
     if (this.auditionSource) {
       try { this.auditionSource.stop(); } catch { /* already stopped */ }
       this.auditionSource = null;
+      this.auditionLoopId = null;
+      this.onAuditionChange?.(null);
     }
   }
 

@@ -1,3 +1,5 @@
+# TRY NOW: [Vibe Loops Live](https://maxfridbe.github.io/vibe-loops/)
+
 # Vibe Loops
 
 A serverless, single-page loop-based DAW that runs entirely in one browser.
@@ -28,9 +30,13 @@ All implemented functionality is tracked with requirement IDs in
   mp3 audio embedded as BLOBs, so a project file is fully portable.
 - **Export** — the arrangement renders offline (faster than realtime) through
   the same scheduler as playback, then encodes to MP3 (lamejs) or WAV.
-- **Themes** — 20 color themes (10 dark, 10 light) implemented as CSS
-  custom-property sets, switchable live from the ribbon and remembered in
-  `localStorage`.
+- **Themes & scaling** — 20 color themes (10 dark, 10 light) implemented as
+  CSS custom-property sets, plus an interface-size control (the whole UI is
+  rem-based, so it scales typographically); both remembered in `localStorage`.
+- **Grow the library** — import `.mp3` / `.wav` / `.mid` files (MIDI is
+  rendered by a small built-in synth) or record straight from the microphone;
+  a trim dialog with draggable in/out handles and preview cuts the take into
+  a loop that is stored in the library like any other.
 
 ### Controls
 

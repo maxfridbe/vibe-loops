@@ -56,6 +56,15 @@ Status: ✅ implemented · 🚧 planned
 | REQ-WFE-0022 | A status readout in the ribbon reports the last operation (saving, rendering, errors). | ✅ |
 | REQ-WFE-0023 | 20 color themes (10 dark, 10 light) implemented purely as CSS custom-property sets (`:root[data-theme=…]`); a ribbon theme picker (view group) switches them live and persists the choice in `localStorage`. | ✅ |
 | REQ-WFE-0024 | UI icons are Nerd Font glyphs served from the repo's `fonts/` directory (Symbols Nerd Font via `@font-face`); icon sizes are rem-based so they scale with the interface. | ✅ |
+| REQ-WFE-0025 | The ribbon is organized into tabs (Home / Export / View) with an always-visible transport cluster (play-from-start, play/stop, position, BPM, master volume) on the tab strip. | ✅ |
+| REQ-WFE-0026 | The playlist cursor reflects the active tool (move for draw, copy for paint, col-resize for slice, pointer for mute, crosshair for select). | ✅ |
+| REQ-WFE-0027 | Library rows expose a hover play/stop button for previews; previews respect the master volume and can be stopped mid-play. Clicking a row focuses the loop without auto-playing. | ✅ |
+| REQ-WFE-0028 | Track rename uses an in-app modal dialog (Enter/Escape/buttons), not the browser prompt. | ✅ |
+| REQ-WFE-0029 | The track color swatch opens a color picker on click. | ✅ |
+| REQ-WFE-0030 | A play-from-beginning transport button exists with the Ctrl+Space (Cmd+Space) shortcut. | ✅ |
+| REQ-WFE-0031 | The View tab offers an interface-size control (80–150%) that scales the whole rem-based UI via the root font size, persisted in `localStorage`. | ✅ |
+| REQ-WFE-0032 | Every ribbon/transport control carries an explanatory hover tooltip (`title`). | ✅ |
+| REQ-WFE-0033 | Clip move gestures apply deltas relative to the gesture-start position (never the current one), so dragging cannot accelerate or compound. | ✅ |
 
 ## Audio engine
 
@@ -82,6 +91,10 @@ Status: ✅ implemented · 🚧 planned
 | REQ-DAT-0006 | Editing is non-destructive: slicing, slipping, and resizing store metadata only; source mp3 blobs are never modified (INT-DAT-001 analogue). | ✅ |
 | REQ-DAT-0007 | Mixdown export encodes MP3 in-browser via vendored lamejs (192 kbps) and WAV (16-bit PCM), delivered as downloads. | ✅ |
 | REQ-DAT-0008 | Loop provenance (license, source URL) is tracked per loop from `assets/loops.tsv` into the database. | ✅ |
+| REQ-DAT-0009 | Users can import `.mp3` and `.wav` files into the library; imports pass through a trim dialog (waveform, draggable in/out handles, preview, name/category/beats) and are re-encoded to mp3 for storage. | ✅ |
+| REQ-DAT-0010 | Users can import `.mid`/`.midi` files: a built-in SMF parser (formats 0/1, PPQ, tempo) feeds a small offline synth (detuned triangles + lowpass) whose render enters the same trim dialog. | ✅ |
+| REQ-DAT-0011 | Users can record loops from the microphone (getUserMedia + MediaRecorder) into the same trim dialog and thus into the library. | ✅ |
+| REQ-DAT-0012 | Imported/recorded loops persist like any other: they are embedded in saved `.vibeloop` files and auto-focused for immediate placement. | ✅ |
 
 ## Deployment
 
