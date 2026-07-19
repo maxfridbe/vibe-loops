@@ -25,6 +25,10 @@ fetch "https://unpkg.com/sql.js@${SQLJS_VERSION}/dist/sql-wasm.js"              
 fetch "https://unpkg.com/sql.js@${SQLJS_VERSION}/dist/sql-wasm.wasm"                 lib/sql-wasm.wasm
 fetch "https://unpkg.com/lamejs@${LAMEJS_VERSION}/lame.min.js"                       lib/lame.min.js
 
+# --- icon font (shipped from fonts/) ---------------------------------------
+mkdir -p fonts
+fetch "https://github.com/ryanoasis/nerd-fonts/raw/master/patched-fonts/NerdFontsSymbolsOnly/SymbolsNerdFont-Regular.ttf" fonts/SymbolsNerdFont-Regular.ttf
+
 # --- dev-only typings (not shipped) ----------------------------------------
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT

@@ -114,3 +114,5 @@ starter library is the same format with an empty arrangement.
 - Synthesized loops: CC0 by construction.
 - Vendored libraries: React/ReactDOM (MIT), sql.js (MIT), lamejs (LGPL-3.0,
   vendored unmodified as a separate file).
+- Icon font: Symbols Nerd Font (`fonts/`), MIT/OFL
+  ([nerd-fonts](https://github.com/ryanoasis/nerd-fonts)).

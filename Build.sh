@@ -14,8 +14,9 @@ echo "[2/4] assembling starter library (sqlite3)"
 
 echo "[3/4] copying static assets"
 cp css/vibe-loops.css dist/
-mkdir -p dist/lib
+mkdir -p dist/lib dist/fonts
 cp lib/*.js lib/*.wasm dist/lib/
+cp fonts/*.ttf dist/fonts/
 
 echo "[4/4] generating index.html with SRI hashes"
 ./scripts/gen-index.sh

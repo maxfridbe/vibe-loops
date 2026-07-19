@@ -184,6 +184,22 @@
   --playhead: #9aa626;
 }
 
+@font-face {
+  font-family: 'Symbols Nerd Font';
+  src: url('fonts/SymbolsNerdFont-Regular.ttf') format('truetype');
+  font-display: block;
+}
+
+.nf-icon {
+  font-family: 'Symbols Nerd Font';
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1;
+  display: inline-block;
+  min-width: 1em;
+  text-align: center;
+}
+
 * { box-sizing: border-box; }
 
 html, body {

@@ -55,6 +55,7 @@ Status: ✅ implemented · 🚧 planned
 | REQ-WFE-0021 | Horizontal zoom (0.4–10 rem per beat) adjustable from state; playlist width grows with the arrangement. | ✅ |
 | REQ-WFE-0022 | A status readout in the ribbon reports the last operation (saving, rendering, errors). | ✅ |
 | REQ-WFE-0023 | 20 color themes (10 dark, 10 light) implemented purely as CSS custom-property sets (`:root[data-theme=…]`); a ribbon theme picker (view group) switches them live and persists the choice in `localStorage`. | ✅ |
+| REQ-WFE-0024 | UI icons are Nerd Font glyphs served from the repo's `fonts/` directory (Symbols Nerd Font via `@font-face`); icon sizes are rem-based so they scale with the interface. | ✅ |
 
 ## Audio engine
 
